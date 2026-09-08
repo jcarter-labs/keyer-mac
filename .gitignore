@@ -1,0 +1,35 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual environment (never committed) ---
+.venv/
+
+# --- Secrets / local config ---
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+config.local.json
+
+# --- Runtime artifacts ---
+*.log
+dist/
+build/
+
+# --- Ad-hoc screenshots dropped in the project root ---
+Screenshot*.png
+screenshot*.png
+
+# --- OS cruft ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Editor cruft ---
+.obsidian/
