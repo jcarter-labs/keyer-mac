@@ -153,8 +153,37 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    latent mutable-class-attribute bug the tests caught directly — see
    deviation-log.md #4. Serial/XMLRPC behavior stays covered only by
    Task 2's live diagnostics, per Verification Standard.
-6. Polish pass, measured against keyer-win-ui.png → Spec §2 — per UI
-   Fidelity rule, list each widget's anchor/justify and compare against
-   the reference before declaring done.
+6. Polish pass, measured against keyer-win-ui.png → Spec §2 — DONE.
+   `tools/ui_fidelity_check.py` (new, re-runnable per the Standing Bar on
+   numeric layout claims) launches WinKeyer headless, reads real widget
+   geometry post-layout, and grabs an actual rendered screenshot. Window
+   size 579×594 matches main.ui's declared geometry exactly.
+
+   Per-widget anchor/justify vs. the reference, all matching:
+   - "Sent Text" label: top-left, AlignLeft|AlignVCenter.
+   - Settings gear (⚙): top row, between label and device dropdown —
+     renders clearly here (system font fallback, per the pinned Task-3
+     decision); barely visible in the reference's Linux/GTK rendering,
+     not a layout difference.
+   - Device dropdown: top-right, spans remaining row width.
+   - Sent-text output box: full width, left-justified text, below row 0.
+   - "Free text input" label: left, AlignLeft|AlignVCenter.
+   - "Speed:" label: AlignTrailing|AlignVCenter, immediately left of the
+     spinbox — matches reference's right-justified placement.
+   - Speed spinbox: same row, right side.
+   - Free-text input box: full width, below that row.
+   - Six msg rows: QLineEdit (left-justified, most of row width) + fixed
+     70px QPushButton flush right — uniform 34px row spacing measured
+     across all six (msg1 y=378 through msg6 y=548).
+
+   One real discrepancy found and resolved: the reference screenshot is
+   byte-identical to pywinkeyerserial's own bundled `pic/WINKEYERSCREEN.png`
+   — the source repo's stale README image. Its "send msg N" button text
+   and "K6GTE PyWinKeyer" title predate the current main.ui (which has
+   said "msg N" and "K6GTE winkeyerserial" across its whole git history —
+   confirmed via `git log -p`). Current source is authoritative over its
+   own stale screenshot; keyer_mac's "msg N" labels (already ported
+   as-is from current source) needed no change. Window title stays
+   "keyer-mac" per the earlier pinned decision, unaffected either way.
 7. End-of-build addendum — review corrections + deviation log, propose a
    Constitution diff.
