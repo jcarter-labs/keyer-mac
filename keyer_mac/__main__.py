@@ -300,12 +300,14 @@ class WinKeyer(QtWidgets.QMainWindow):
             self.port.write_timeout = 1  # prevent writes from blocking forever if the device stops responding
             self.port.open()
             if not self.port.is_open:
-                self.outputbox.insertPlainText(
-                    f"Unable to open serial port: {self.device}"
-                )
+                msg = f"Unable to open serial port: {self.device}"
+                logging.warning(msg)
+                self.outputbox.insertPlainText(msg)
                 return
         except serial.serialutil.SerialException:
-            self.outputbox.insertPlainText(f"Unable to open serial port: {self.device}")
+            msg = f"Unable to open serial port: {self.device}"
+            logging.warning(msg)
+            self.outputbox.insertPlainText(msg)
             self.port = False
             return
         self.host_open()
@@ -321,10 +323,13 @@ class WinKeyer(QtWidgets.QMainWindow):
         time.sleep(0.5)
         self.version = self.port.read(255)
         if self.version == b"":  # No version... Maybe the wrong serial port was chosen.
+            msg = f"{self.device} is open but WinKeyer is not responding"
+            # This message previously only ever reached the on-screen output
+            # box, invisible to any terminal/log-based diagnostic — logged
+            # here too so it's observable without watching the GUI.
+            logging.warning(msg)
             self.outputbox.clear()
-            self.outputbox.insertPlainText(
-                f"{self.device} is open but WinKeyer is not responding"
-            )
+            self.outputbox.insertPlainText(msg)
         self.timer2.start(100)
 
         # Send POTSET to configure speed pot range: min=5 WPM, range=50 WPM (5-55 WPM).
