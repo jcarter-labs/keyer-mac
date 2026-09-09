@@ -374,3 +374,41 @@ Phase 5's before/after result above. #8's settle-timing and
 USB-power-management hypotheses are superseded, not confirmed — the
 actual cause was the close/reopen gap, not open-to-read timing or power
 suspend.
+
+## 10. Rule 9 vs a phantom pot line permanently overriding the speed default (supersedes #6's arbitration approach)
+
+**Rule:** Standing Bar — a control that can never actually be used isn't
+a control; mark unverified behavior unverified until confirmed (rule 9).
+**Conflict:** #6 chose arbitration (track each source's own last value,
+ignore a repeated echo) specifically over ignoring the pot outright,
+because ignoring it "would silently break live pot control on any WK
+unit that has a real, working potentiometer." That was a hedge against
+an unconfirmed possibility — this session the operator confirmed
+directly this WK-mini has no physical pot at all. Arbitration only
+suppresses a *repeated* stale reading; the *first* one after any fresh
+`host_init()` still passes through unopposed (`_last_pot_speed` starts
+`None`), so the phantom 35 WPM reading silently overwrote the coded
+20 WPM default (`self.spinBox_speed.setValue(20)` in `__init__`) on
+every startup and every reconnect — confirmed live via
+`tools/app_level_repro.py` Phase 3, which printed "current speed: 35"
+immediately after a clean `host_init()` with no user interaction.
+**Decision:** `getwaiting()`'s pot-status-byte branch now discards the
+byte unconditionally (`pass`, matching the existing Status Change
+branch) instead of calling `potspeed()`. `potspeed()` and
+`_last_pot_speed` are removed outright — dead code once nothing calls
+them, per Standing Bars: don't keep a mechanism whose only job was
+managing an input this hardware doesn't have. The spinbox (and XMLRPC's
+`setspeed`) are now the sole speed-setting mechanism. Verified live:
+`spinBox_speed.value()` held at 20 through `host_init()` and 5s of
+`getwaiting()` polling against the real WK-mini (previously snapped to
+35 within the first poll).
+**Rejected alternative:** Keep #6's arbitration and additionally guard
+the very first pot reading too (e.g. seed `_last_pot_speed` from the
+first byte without applying it) — rejected as unnecessary complexity
+now that the hardware is confirmed pot-less; arbitration's whole reason
+to exist was "a real pot might be present," which no longer applies to
+this operator's unit.
+**Not touched:** `main.ui`'s `spinBox_speed` still caps at 35 WPM
+(`minimum=5`, `maximum=35`), independent of POTSET's configured 5-55 WPM
+hardware range — noted as a pending follow-up in #6, still pending,
+unrelated to this fix.

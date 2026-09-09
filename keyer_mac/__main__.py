@@ -13,13 +13,10 @@ device and the presaved messages.
 
 When you update the presaved message fields they are resaved automatically.
 
-The speed is initially set by polling the speed pot.
-
-The speed pot should work to change the code speed on the fly.
-
-This is where I realized that not all K1EL keyers have a speedpot on them....
-
-You really should have gotten the one with the speedpot.....
+Speed defaults to 20 WPM and is set from the on-screen spinbox only —
+speed-pot status bytes are ignored (deviation-log.md #10; this port
+targets a WK-mini with no physical pot, unlike upstream's assumption
+that the pot is a working control).
 """
 
 # >>> a=12
@@ -223,14 +220,14 @@ class WinKeyer(QtWidgets.QMainWindow):
         self.sendmsg6_button.clicked.connect(self.sendmsg6)
         self.settings_gear.clicked.connect(self.edit_configuration_settings)
         self.inputbox.textChanged.connect(self.handle_text_change)
-        # Speed-control arbitration (deviation-log.md #6): a WK-mini with no
-        # physical pot still emits pot-status bytes off its floating ADC
-        # line, which would otherwise permanently overwrite the spinbox
-        # every 100ms poll. Track each source's own last value and only
-        # act on a genuine change from that source, so a stale/repeated
-        # pot echo can't reclobber a manual speed change, while a real pot
-        # movement (if a unit has one) still takes control as source intends.
-        self._last_pot_speed = None
+        # Pot-status bytes are ignored entirely (deviation-log.md #10,
+        # superseding #6's arbitration approach): this operator's WK-mini
+        # has no physical pot, confirmed directly — its floating ADC pot
+        # input still emits a phantom pot-status byte on every
+        # getwaiting() poll, which used to snap the spinbox back to a
+        # stale reading (35 WPM) every 100ms. getwaiting() now discards
+        # that byte outright instead of routing it to a speed change, so
+        # the spinbox is the sole speed control on this hardware.
         self._last_manual_speed = None
         self._suppress_spinbox_signal = False
         self.spinBox_speed.valueChanged.connect(self.spinboxspeed)
@@ -550,23 +547,6 @@ class WinKeyer(QtWidgets.QMainWindow):
             self.spinBox_speed.setValue(int(speed))
             self._suppress_spinbox_signal = False
 
-    def potspeed(self, speed):
-        """
-        The pot speed value is the 6 LSB of the returned byte.
-        It has the 2 MSB of the byte set to 10.
-
-        Only acts on a genuine change from the pot's own last-reported
-        value — a WK-mini with no physical pot still emits status bytes
-        off its floating ADC line, and without this check that stale,
-        repeated reading would permanently overwrite any speed set from
-        the spinbox or XMLRPC (see deviation-log.md #6).
-        """
-        wpm = speed - 123
-        if wpm == self._last_pot_speed:
-            return
-        self._last_pot_speed = wpm
-        self.setspeed(wpm)
-
     def spinboxspeed(self):
         """
         User changed the speed value in the spinbox — or this fired
@@ -740,7 +720,7 @@ class WinKeyer(QtWidgets.QMainWindow):
                 if (byte[0] & b"\xc0"[0]) == b"\xc0"[0]:  # Status Change
                     pass
                 elif (byte[0] & b"\xc0"[0]) == b"\x80"[0]:  # speed pot change
-                    self.potspeed(byte[0])
+                    pass  # ignored: no physical pot on this hardware (deviation-log.md #10)
                 else:  # process echoback character
                     if 0x20 <= byte[0] <= 0x7E:
                         # print(byte.decode(), end="", flush=True)
