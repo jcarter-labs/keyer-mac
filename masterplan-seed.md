@@ -145,11 +145,14 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    window opens titled "keyer-mac", device auto-detected, speed spinbox
    synced live to the pot position, all 6 message fields/buttons and
    the settings gear present.
-5. Tests — logic-only unit tests (mode-register bits, dotfile
-   round-trip) run mocked/headless (QT_QPA_PLATFORM=offscreen); serial
-   and XMLRPC behavior stay covered only by Task 2's live diagnostic, per
-   Verification Standard — source has zero existing tests, so this is
-   new coverage, not a port.
+5. Tests — DONE. 5 passing pytest tests (`tests/`), headless
+   (QT_QPA_PLATFORM=offscreen): mode-register bit packing/unpacking
+   (`Settings`, 3 tests) and dotfile round-trip (`WinKeyer.loadsaved`/
+   `savestuff`, 2 tests). Required deferring `keyer_mac.__main__`'s
+   bootstrap into `main()` (source ran it at module level) and fixing a
+   latent mutable-class-attribute bug the tests caught directly — see
+   deviation-log.md #4. Serial/XMLRPC behavior stays covered only by
+   Task 2's live diagnostics, per Verification Standard.
 6. Polish pass, measured against keyer-win-ui.png → Spec §2 — per UI
    Fidelity rule, list each widget's anchor/justify and compare against
    the reference before declaring done.
