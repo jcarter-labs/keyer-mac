@@ -449,3 +449,35 @@ succeeds, but `_attempt_reconnect()`'s automatic path does not, so an
 automatic reconnect never re-sends the mode register. Not reported as a
 symptom; flagged per rule 9 rather than silently left for a future
 session to rediscover the hard way.
+
+## 12. Rule 9 vs the same connect-sync gap in setmode() (fixes #11's flagged-not-fixed item, on request)
+
+**Rule:** Same as #11 — a control/setting that only applies after an
+explicit, non-uniform call site isn't reliably applied (rule 9).
+**Conflict:** `setmode()` had the identical structural gap `setspeed()`
+had before #11: `main()` and `change_serial()` each called
+`if self.port: self.setmode()` themselves right after `host_init()`,
+but `_attempt_reconnect()`'s automatic-reconnect path called
+`host_init(is_reconnect=True)` directly and never called `setmode()`
+afterward — so an automatic reconnect never re-sent the mode register.
+Additionally, both external call sites checked `if self.port:` (the
+OS-level port opened) rather than whether the WinKeyer actually
+responded — looser than necessary, and inconsistent with how #11 guards
+`setspeed()` (`if self.version:`).
+**Decision:** `host_open()` now calls `self.setmode()` alongside
+`self.setspeed(...)` inside the `if self.version:` success branch,
+covering cold start, manual reselect, and automatic reconnect
+uniformly, and only firing on a confirmed response. The now-redundant
+external calls in `main()` and `change_serial()` are removed rather than
+left as harmless duplicates — keeping them would read as a second,
+looser sync path a future reader would have to reconcile against the
+first.
+**Not touched:** `savestuff()`'s own unconditional `self.setmode()` call
+(fires on every preset-message edit or settings-dialog save) is a
+different, intentional re-assert-on-settings-change path, internally
+guarded by `setmode()`'s own `hasattr(self.port, "write")` check — left
+as-is.
+**Verified live:** wrapped `_port_write` on the real `WinKeyer` instance
+and confirmed the actual byte sequence written to the WK-mini on connect
+now includes both `b'\x02\x14'` (setspeed, 20 WPM) and `b'\x0e\xce'`
+(setmode, default register `11001110`).

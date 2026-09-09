@@ -311,9 +311,7 @@ class WinKeyer(QtWidgets.QMainWindow):
         self.settings_dict["device"] = self.comboBox_device.currentText()
         self.savestuff()
         self.device = self.settings_dict.get("device")
-        self.host_init()
-        if self.port:
-            self.setmode()
+        self.host_init()  # setmode()/setspeed() sync to the device internally on success
 
     def loadsaved(self):
         """
@@ -449,6 +447,16 @@ class WinKeyer(QtWidgets.QMainWindow):
             # touch the spinbox. Push the displayed value to the device
             # explicitly on every successful (re)connect instead.
             self.setspeed(self.spinBox_speed.value())
+            # Same structural gap as setspeed() above (deviation-log.md
+            # #11's "related, not fixed here" note): main()/change_serial()
+            # used to call setmode() themselves after host_init(), but
+            # _attempt_reconnect()'s automatic path never did, so an
+            # automatic reconnect never re-sent the mode register. Send it
+            # here instead, unconditionally on every successful connect —
+            # covers cold start, manual reselect, and automatic reconnect
+            # alike, and only fires when the WinKeyer actually responded
+            # (self.version), not just when the OS-level port opened.
+            self.setmode()
         else:
             msg = f"{self.device} is open but WinKeyer is not responding"
             # This message previously only ever reached the on-screen output
@@ -894,9 +902,7 @@ def main():
     signal.signal(signal.SIGINT, _handle_sigint)
     signal.signal(signal.SIGTERM, _handle_sigint)
 
-    keyer.host_init()
-    if keyer.port:
-        keyer.setmode()
+    keyer.host_init()  # setmode()/setspeed() sync to the device internally on success
     rpcwidget = RPCWidget()
     timer = QTimer()
     timer.timeout.connect(keyer.checkmessage)  # Do not do this.

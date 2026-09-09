@@ -123,6 +123,22 @@ def test_host_open_pushes_displayed_speed_to_device_on_success(monkeypatch, tmp_
     assert expected in fake.writes
 
 
+def test_host_open_sends_mode_register_to_device_on_success(monkeypatch, tmp_path):
+    """Same structural gap as setspeed() above: main()/change_serial()
+    used to call setmode() themselves after a successful host_init(), but
+    the automatic-reconnect path (_attempt_reconnect()) never did. A
+    successful host_open() must now send the mode register itself,
+    covering every connect path uniformly."""
+    win = make_keyer(monkeypatch, tmp_path)
+    fake = install_scripted_serial(monkeypatch, [b"WK\r"])
+
+    win.host_init()
+
+    register = win.settings_dict.get("mode_register", "11001110")
+    expected = b"\x0e" + int(register, 2).to_bytes()
+    assert expected in fake.writes
+
+
 def test_close_reopen_settle_delay_only_when_reopening(monkeypatch, tmp_path):
     """The settle delay belongs between closing a previous port and
     opening the new one — it must not fire on the very first open (no
