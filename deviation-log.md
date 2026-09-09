@@ -64,3 +64,28 @@ parity" quirk like the three in §2.
 work around the sharing in test fixtures (e.g. reset it between tests) —
 rejected as preserving a real bug for tests to keep dodging, for no
 production benefit.
+
+## 5. Rule 9 vs a crash-on-recoverable-condition (RPCThread bind failure)
+
+**Rule:** Mark unverified behavior unverified; more generally, a
+recoverable condition shouldn't cost more than the feature it belongs to.
+**Conflict:** Source's `RPCThread.run()` has no error handling around
+`SimpleXMLRPCServer(("0.0.0.0", 8000), ...)`. Any bind failure (port
+already in use — another instance, a leftover process, an unrelated
+service) raises `OSError` inside a `QThread.run()` override; PyQt6's
+default handling of an exception escaping such an override is to print
+it and `abort()` the whole process. Confirmed live twice in one evening:
+a leftover keyer_mac process from an earlier test run held port 8000,
+and the next launch aborted the entire app — including the keyer itself
+— over an XMLRPC-only problem.
+**Decision:** Wrap the bind in `try/except OSError`, log the failure,
+and return — the keyer and its UI keep working normally; only the
+XMLRPC bridge is unavailable for that run. A behavioral change from
+source, not just a testability seam, but justified: this crash mode has
+nothing to do with the WinKeyer protocol Task 2/3 exists to preserve
+faithfully, and losing the whole app over a mundane port conflict is a
+worse failure than the three quirks kept for parity in §2.
+**Rejected alternative:** Leave unguarded for source parity — rejected;
+unlike the WinKeyer protocol quirks, an app-wide abort() over a
+recoverable network condition serves no fidelity purpose and had
+already produced two real crash reports before this fix.

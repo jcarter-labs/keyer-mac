@@ -116,15 +116,31 @@ class RPCThread(QThread):
         if self._stop_requested:
             return
         print("--- starting server…")
-        with SimpleXMLRPCServer(("0.0.0.0", 8000), allow_none=True) as self.server:
-            self.server.register_function(k1elsendstring)
-            self.server.register_function(setspeed)
-            self.server.register_function(sendblended)
-            self.server.register_function(tuneon)
-            self.server.register_function(tuneoff)
-            self.server.register_function(clearbuffer)
-            self.server.register_introspection_functions()
-            self.server.serve_forever()
+        try:
+            with SimpleXMLRPCServer(("0.0.0.0", 8000), allow_none=True) as self.server:
+                self.server.register_function(k1elsendstring)
+                self.server.register_function(setspeed)
+                self.server.register_function(sendblended)
+                self.server.register_function(tuneon)
+                self.server.register_function(tuneoff)
+                self.server.register_function(clearbuffer)
+                self.server.register_introspection_functions()
+                self.server.serve_forever()
+        except OSError as err:
+            # Source leaves this bind unguarded, so any bind failure (port
+            # already in use — another instance, a leftover process, an
+            # unrelated service) crashes the whole app: an unhandled
+            # exception escaping a QThread.run() override makes PyQt6
+            # print it and abort() the process, keyer included. Logging
+            # and returning instead means a port conflict costs only the
+            # XMLRPC bridge for that run, not the running app.
+            self.server = None
+            logging.error(
+                "RPCThread: could not start XMLRPC server on 0.0.0.0:8000 (%s) — "
+                "the keyer will still work, XMLRPC-driven logging software won't "
+                "be able to reach it this run.",
+                err,
+            )
 
 
 class RPCWidget(QWidget):
