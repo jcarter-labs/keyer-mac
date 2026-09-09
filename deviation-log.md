@@ -412,3 +412,40 @@ this operator's unit.
 (`minimum=5`, `maximum=35`), independent of POTSET's configured 5-55 WPM
 hardware range — noted as a pending follow-up in #6, still pending,
 unrelated to this fix.
+
+## 11. Rule 9 vs the displayed speed default never reaching the device (found while verifying #10)
+
+**Rule:** Standing Bar — a displayed default that doesn't match reality
+is worse than no default; verify against real hardware, not just the
+on-screen widget (rule 9).
+**Conflict:** Operator reported real, audible symptom after #10 shipped:
+code plays much slower than 20 WPM at startup with the spinbox
+untouched, then snaps to the right speed as soon as the spinbox is
+adjusted. Root cause: `__init__`'s `self.spinBox_speed.setValue(20)`
+fires `spinboxspeed()` → `setspeed(20)` before `self.port` exists (host
+isn't opened until `host_init()` runs later) — `setspeed()`'s
+`hasattr(self.port, "write")` guard silently drops the call, so the
+display reads 20 but no `setspeed` command was ever sent to the
+WinKeyer. The device kept running at whatever speed it powered on with
+(EEPROM/last-set value) until a manual spinbox touch finally issued a
+real write. #6/#10's phantom pot mechanism used to (accidentally) paper
+over this — `potspeed()` called `setspeed()` on every connect, so a
+wrong value at least reached the device; removing it in #10 exposed this
+pre-existing gap rather than introducing a new one.
+**Decision:** `host_open()` now calls
+`self.setspeed(self.spinBox_speed.value())` immediately after a
+successful connection (inside the `if self.version:` branch, so it never
+fires against a device that isn't actually there). Runs on every
+successful `host_init()` — cold start, manual reselect, and automatic
+reconnect alike — so the device's actual speed always matches the
+display, not just after the first manual nudge.
+**Verified live:** wrapped `_port_write` on the real `WinKeyer` instance
+and confirmed the actual byte sequence written to the WK-mini on connect
+now includes `b'\x02\x14'` (setspeed, 20 WPM) between the host-open
+handshake and POTSET.
+**Related, not fixed here:** `setmode()` has the identical structural
+gap — `main()`/`change_serial()` call it explicitly after `host_init()`
+succeeds, but `_attempt_reconnect()`'s automatic path does not, so an
+automatic reconnect never re-sends the mode register. Not reported as a
+symptom; flagged per rule 9 rather than silently left for a future
+session to rediscover the hard way.

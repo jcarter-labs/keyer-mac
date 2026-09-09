@@ -441,6 +441,14 @@ class WinKeyer(QtWidgets.QMainWindow):
 
         if self.version:  # No version... Maybe the wrong serial port was chosen.
             self._register_reconnect_success()
+            # __init__'s spinBox_speed.setValue(20) fires before self.port
+            # exists, so setspeed()'s hasattr(self.port, "write") guard
+            # silently no-ops it — the display shows 20 but the WinKeyer
+            # itself never got the command and keeps running at whatever
+            # speed it powered on with, until the operator happens to
+            # touch the spinbox. Push the displayed value to the device
+            # explicitly on every successful (re)connect instead.
+            self.setspeed(self.spinBox_speed.value())
         else:
             msg = f"{self.device} is open but WinKeyer is not responding"
             # This message previously only ever reached the on-screen output

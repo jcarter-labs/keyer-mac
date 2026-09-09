@@ -38,6 +38,7 @@ class ScriptedSerial:
     def __init__(self, version_sequence):
         self._version_sequence = list(version_sequence)
         self.read_calls = 0
+        self.writes = []
         self.is_open = True
         self.port = None
         self.baudrate = None
@@ -56,7 +57,7 @@ class ScriptedSerial:
         pass
 
     def write(self, data):
-        pass
+        self.writes.append(data)
 
     def read(self, size=1):
         self.read_calls += 1
@@ -103,6 +104,23 @@ def test_host_open_gives_up_after_max_attempts_and_logs_once(monkeypatch, tmp_pa
     not_responding = [r for r in caplog.records if "not responding" in r.message]
     assert len(not_responding) == 1
     assert win._reconnect_attempt == 1
+
+
+def test_host_open_pushes_displayed_speed_to_device_on_success(monkeypatch, tmp_path):
+    """__init__'s spinBox_speed.setValue(20) fires before self.port
+    exists, so setspeed()'s hasattr(self.port, "write") guard silently
+    drops it — the WinKeyer never got a setspeed command and kept
+    running at its own power-on speed until the operator happened to
+    touch the spinbox. A successful host_open() must now push the
+    displayed value (default 20 WPM) to the device itself."""
+    win = make_keyer(monkeypatch, tmp_path)
+    assert win.spinBox_speed.value() == 20
+    fake = install_scripted_serial(monkeypatch, [b"WK\r"])
+
+    win.host_init()
+
+    expected = chr(2).encode() + chr(20).encode()  # setspeed()'s command format
+    assert expected in fake.writes
 
 
 def test_close_reopen_settle_delay_only_when_reopening(monkeypatch, tmp_path):
