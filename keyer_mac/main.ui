@@ -41,22 +41,12 @@
         <height>112</height>
        </size>
       </property>
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
      </widget>
     </item>
     <item row="11" column="1" colspan="5">
      <layout class="QHBoxLayout" name="horizontalLayout_4">
       <item>
        <widget class="QLineEdit" name="msg4">
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
        </widget>
       </item>
       <item>
@@ -67,11 +57,6 @@
           <height>16777215</height>
          </size>
         </property>
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
         <property name="text">
          <string>msg 4</string>
         </property>
@@ -81,11 +66,6 @@
     </item>
     <item row="2" column="1">
      <widget class="QLabel" name="label_2">
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
       <property name="text">
        <string>Free text input</string>
       </property>
@@ -95,11 +75,6 @@
      <layout class="QHBoxLayout" name="horizontalLayout_6">
       <item>
        <widget class="QLineEdit" name="msg6">
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
        </widget>
       </item>
       <item>
@@ -109,11 +84,6 @@
           <width>70</width>
           <height>16777215</height>
          </size>
-        </property>
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
         </property>
         <property name="text">
          <string>msg 6</string>
@@ -126,11 +96,6 @@
      <layout class="QHBoxLayout" name="horizontalLayout_2">
       <item>
        <widget class="QLineEdit" name="msg2">
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
        </widget>
       </item>
       <item>
@@ -141,11 +106,6 @@
           <height>16777215</height>
          </size>
         </property>
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
         <property name="text">
          <string>msg 2</string>
         </property>
@@ -155,11 +115,6 @@
     </item>
     <item row="2" column="5">
      <widget class="QSpinBox" name="spinBox_speed">
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
       <property name="minimum">
        <number>5</number>
       </property>
@@ -170,11 +125,6 @@
     </item>
     <item row="2" column="4">
      <widget class="QLabel" name="label_3">
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
       <property name="text">
        <string>Speed:</string>
       </property>
@@ -187,11 +137,6 @@
      <layout class="QHBoxLayout" name="horizontalLayout_5">
       <item>
        <widget class="QLineEdit" name="msg5">
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
        </widget>
       </item>
       <item>
@@ -201,11 +146,6 @@
           <width>70</width>
           <height>16777215</height>
          </size>
-        </property>
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
         </property>
         <property name="text">
          <string>msg 5</string>
@@ -222,11 +162,6 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
       <property name="currentText">
        <string/>
       </property>
@@ -236,11 +171,6 @@
      <layout class="QHBoxLayout" name="horizontalLayout_3">
       <item>
        <widget class="QLineEdit" name="msg3">
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
        </widget>
       </item>
       <item>
@@ -250,11 +180,6 @@
           <width>70</width>
           <height>16777215</height>
          </size>
-        </property>
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
         </property>
         <property name="text">
          <string>msg 3</string>
@@ -271,20 +196,10 @@
         <height>153</height>
        </size>
       </property>
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
      </widget>
     </item>
     <item row="0" column="1">
      <widget class="QLabel" name="label">
-      <property name="font">
-       <font>
-        <family>JetBrains Mono</family>
-       </font>
-      </property>
       <property name="text">
        <string>Sent Text</string>
       </property>
@@ -294,11 +209,6 @@
      <layout class="QHBoxLayout" name="horizontalLayout">
       <item>
        <widget class="QLineEdit" name="msg1">
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
-        </property>
        </widget>
       </item>
       <item>
@@ -308,11 +218,6 @@
           <width>70</width>
           <height>16777215</height>
          </size>
-        </property>
-        <property name="font">
-         <font>
-          <family>JetBrains Mono</family>
-         </font>
         </property>
         <property name="text">
          <string>msg 1</string>
@@ -331,7 +236,6 @@
       </property>
       <property name="font">
        <font>
-        <family>JetBrains Mono</family>
         <pointsize>17</pointsize>
        </font>
       </property>
