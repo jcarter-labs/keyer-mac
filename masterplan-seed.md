@@ -121,12 +121,14 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
 1. Constitution check — walk Spec/Tech against the 11 rules; log kept
    deviations (e.g. global-variable XMLRPC bridge, bare-except reconnect,
    hardcoded pot range — Tech §4) as rule / why / rejected alternative.
-2. External interfaces → Spec §3 — DEFERRED until the K1EL WinKeyer is
-   physically connected (operator locating/connecting hardware). Live
-   diagnostic against the real device, no mocks, per Verification
-   Standard: open real macOS serial device, send host-open command
-   (0x00 0x02), read version response; verify XMLRPC server on
-   127.0.0.1:8000 answers a real k1elsendstring call.
+2. External interfaces → Spec §3 — DONE. Live diagnostics against the
+   real K1EL WinKeyer at /dev/cu.usbserial-8340 (`tools/
+   winkeyer_diagnostic.py`, `tools/winkeyer_xmlrpc_diagnostic.py`), no
+   mocks, per Verification Standard: host_open returned version 0x1f
+   (firmware v3.1); POTSET + pot-speed query decoded to 55 WPM; XMLRPC
+   server on 0.0.0.0:8000 answered a real k1elsendstring("TEST") call
+   with the device not wired to a radio (operator-confirmed before
+   sending).
 3. Core logic → Spec §2–3 — port WinKeyer class (send, sendblended,
    tuneon/off, clearbuffer, setspeed, potspeed, mode-register bit
    packing), settings dialog, ~/.keyer-mac.json dotfile persistence
