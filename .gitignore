@@ -36,3 +36,6 @@ desktop.ini
 
 # --- Editor cruft ---
 .obsidian/
+
+# --- Agent worktrees (temporary, per-session) ---
+.claude/worktrees/

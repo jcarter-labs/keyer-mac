@@ -122,3 +122,101 @@ independent of POTSET's configured 5-55 WPM hardware range (§2). This
 own-range mismatch predates today's fix and still limits the on-screen
 control to 35 WPM max regardless of arbitration; raising it to match
 POTSET's range is a candidate follow-up, pending operator decision.
+
+## 7. Rule 9 vs an arbitrary auto-selected device silently persisting a virtual port
+
+**Rule:** Standing Bar — a layout/behavior claimed to work needs a
+re-runnable check, not an assumption; more generally, source's own
+docstring goal ("talks to the WinKeyerUSB and WinKeyerSerial devices")
+assumes the device it opens is actually a WinKeyer.
+
+**Conflict:** Tonight's real incident: the operator's `~/.keyer-mac.json`
+had `"device": "/dev/cu.Bluetooth-Incoming-Port"` saved — a macOS virtual
+Bluetooth-serial-compatibility port with no WinKeyer, or anything, behind
+it. Every launch opened it successfully at the OS level, then correctly
+reported "is open but WinKeyer is not responding" — not a hardware
+fault, purely the wrong device, consistently. Root cause traced to
+`WinKeyer.__init__`'s `comports()` loop (ported verbatim from source,
+confirmed identical in `pywinkeyerserial/winkeyerserial/__main__.py`
+lines 186-195): it unconditionally sets `self.device`/
+`settings_dict["device"]` to whichever port `comports()` enumerates
+*last*, with no regard for whether it looks like real hardware.
+`comports()`'s ordering is OS-internal and not something the app
+controls; a real WinKeyer USB adapter enumerated before a virtual port
+(confirmed possible: `/dev/cu.debug-console` and
+`/dev/cu.Bluetooth-Incoming-Port` both showed on this machine, description
+"n/a", vid `None`, next to `/dev/cu.usbserial-8340` with description
+"USB Serial" and vid/pid set) loses the "last wins" arbitration.
+
+**Hypothesis (best-evidence, not certain — no click-by-click trace of
+tonight's session was available):** the most likely mechanism requiring
+no race or signal misfire at all is that whenever `loadsaved()` writes
+sane defaults for a config that doesn't yet exist (`os.path.exists(path)`
+false), it writes `self.settings_dict` verbatim — including whatever
+arbitrary, possibly-virtual device the enumeration loop just landed on
+— with zero user interaction. `comports()` ordering can plausibly vary
+run to run (e.g. a Bluetooth device reconnecting/re-registering shifts
+where its virtual port lands in the list), so a run where the virtual
+port happened to enumerate last would persist it as the "default"
+immediately.
+
+A second, lower-confidence contributing gap was found during this
+investigation but is **not** fixed here (out of scope per this task's
+scope: `host_init()`'s serial-open/reconnect logic is a different
+agent's territory): `host_init()`'s
+`self.comboBox_device.blockSignals(True)` only suppresses signals
+emitted by the `QComboBox` object itself. It does **not** cover the
+separate `QLineEdit` object returned by `.lineEdit()` (`setEditable(True)`
+puts one there), whose `editingFinished` is wired directly to
+`change_serial` in `__init__`. A focus-out on that inner line edit
+(plausible during window `show()`, opening the Settings dialog, or any
+Qt-internal focus shuffle at startup) fires `editingFinished` unblocked
+by the combobox's own `blockSignals`, calling `change_serial()` and
+persisting whatever text is currently displayed — which, per the
+enumeration-order analysis above, is not necessarily the loaded
+`self.device` at all, since nothing syncs the visible selection to it
+until `host_init()` runs later in `main()`. Flagging this for whoever
+owns `host_init()` next; not exercised or fixed by this change.
+
+**Decision:**
+1. Harden auto-selection only (in scope): add `_is_real_serial_port()`,
+   preferring `vid is not None` (pyserial's structural USB-vendor-id
+   signal, confirmed populated for the one real device and `None` for
+   every virtual entry on this machine) with a description-not-"n/a"
+   fallback for backends that don't populate `vid`. The enumeration loop
+   now tracks the last *real-looking* candidate separately from the last
+   *any* candidate, and prefers the former — so a virtual port
+   enumerated after a real one can no longer clobber it, while an
+   all-virtual or empty port list still falls back to source's original
+   "last one wins" behavior (some default beats none, and there's
+   nothing to discriminate among virtual-only candidates anyway).
+   Manual selection is untouched: every enumerated port, virtual or
+   real, still populates the dropdown and remains explicitly pickable.
+2. **Saved-but-virtual device: still honored, not overridden.** If
+   `loadsaved()` finds an existing saved `"device"` value — even one
+   that looks virtual — it is trusted verbatim, exactly as source always
+   did. Rationale: the combobox is deliberately editable so a user can
+   pick *any* enumerated port on purpose, and there is no way to
+   distinguish "a stale bad auto-default from before this fix" from "a
+   deliberate advanced/test choice" after the fact — silently
+   overriding either would break the explicit-override guarantee this
+   same task requires. The narrower, unambiguous case — no `"device"`
+   key at all, or an empty one — *does* now fall back to the
+   real-hardware-preferring auto pick (`self._auto_default_device`,
+   computed once in `__init__`) instead of raising `KeyError` (source's
+   literal `self.settings_dict["device"]`) or persisting `""`.
+   Root-caused instead of patched over: since the auto-pick itself no
+   longer defaults to a virtual port, a *fresh* bad save of this kind
+   shouldn't recur; the trust-the-saved-value path stays exactly as
+   simple as source's.
+
+**Rejected alternative:** Silently re-run the real-device heuristic over
+a saved-but-virtual device on every load and swap it out from under the
+user — rejected because it directly contradicts the requirement that
+manual selection of a virtual port must keep working, and because there
+is no reliable signal to tell a deliberate choice apart from a bad
+default after the fact. Also rejected: matching on `/dev/cu.*` name
+fragments (e.g. `wchusbserial`, `SLAB_USBtoUART`) as the primary signal
+— macOS-specific, doesn't generalize to Linux/Windows naming, and is
+strictly weaker evidence than `vid`, which pyserial reports the same way
+cross-platform.

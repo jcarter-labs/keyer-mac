@@ -76,6 +76,36 @@ MESSAGE = ""
 HEARTBEAT_INTERVAL_S = 60
 
 
+def _is_real_serial_port(serialport) -> bool:
+    """
+    Best-effort filter distinguishing a real USB-serial device from a
+    macOS virtual/compatibility port (e.g. /dev/cu.Bluetooth-Incoming-Port,
+    /dev/cu.debug-console) reported by `comports()`. See
+    deviation-log.md #7 for the incident this exists to prevent.
+
+    Primary signal: pyserial's `vid` (USB vendor id). It is a structural
+    fact populated by the OS/driver for genuine USB serial adapters and
+    is `None` for non-USB virtual ports — confirmed on this machine:
+    `comports(include_links=True)` returned exactly one entry with a
+    non-None vid/pid (`/dev/cu.usbserial-8340`, description "USB
+    Serial"); every virtual entry (`Bluetooth-Incoming-Port`,
+    `debug-console`, and a paired Bluetooth accessory port) had vid None
+    and description "n/a".
+
+    Fallback (vid unavailable, e.g. a backend/OS combination that
+    doesn't populate it): treat a missing/"n/a" description as the
+    virtual signal instead. Deliberately not pattern-matching on
+    `/dev/cu.*` name fragments — those are macOS-specific and don't
+    generalize to Linux (`/dev/ttyUSB0`) or Windows (`COM3`) naming,
+    while vid/description are reported the same way by pyserial across
+    platforms.
+    """
+    if getattr(serialport, "vid", None) is not None:
+        return True
+    description = (getattr(serialport, "description", "") or "").strip().lower()
+    return description not in ("", "n/a")
+
+
 def config_path() -> str:
     """
     Resolve the dotfile config path. KEYER_MAC_CONFIG_PATH overrides the
@@ -210,12 +240,37 @@ class WinKeyer(QtWidgets.QMainWindow):
         self.last_tx_time = 0.0
         self.timer2 = QTimer()
         self.timer2.timeout.connect(self.getwaiting)
+        # Auto-selection default when there is nothing better to go on yet
+        # (no saved config, or the saved device turns out to be missing —
+        # see loadsaved()). Source picked whichever port comports()
+        # happened to enumerate *last*, arbitrary and OS-order-dependent;
+        # that could — and on this machine's real incident, did — be a
+        # macOS virtual/compatibility port with no WinKeyer behind it
+        # (deviation-log.md #7). last_real_device tracks the same
+        # "last one wins" rule but only among candidates that look like
+        # actual USB serial hardware (_is_real_serial_port), so a virtual
+        # port enumerated after the real one no longer clobbers it.
+        # last_any_device preserves the exact old fallback ("last
+        # enumerated, whatever it is") for the case where nothing in the
+        # list looks like real hardware — still better to offer *some*
+        # default than none, unchanged from source there.
+        last_real_device = ""
+        last_any_device = ""
         for serialport in comports(include_links=True):
             self.comboBox_device.addItem(serialport.device)
             index = self.comboBox_device.findText(serialport.device)
             self.comboBox_device.setItemData(index, serialport.description)
-            self.device = serialport.device
-            self.settings_dict["device"] = self.device
+            last_any_device = serialport.device
+            if _is_real_serial_port(serialport):
+                last_real_device = serialport.device
+        self.device = last_real_device or last_any_device
+        self.settings_dict["device"] = self.device
+        # loadsaved() below overwrites self.device from whatever was
+        # persisted last run — including a *virtual* device, deliberately
+        # (see loadsaved()'s docstring). This is kept as the fallback for
+        # the separate, unambiguous case where there is truly nothing
+        # saved to honor (no "device" key, or an empty one).
+        self._auto_default_device = self.device
         self.comboBox_device.setEditable(True)
         self.loadsaved()
         self.comboBox_device.currentIndexChanged.connect(self.change_serial)
@@ -236,6 +291,18 @@ class WinKeyer(QtWidgets.QMainWindow):
         """
         load saved default device and messages if they exist.
         otherwise write some sane defaults as a json text file in the users home directory.
+
+        Deliberately does NOT second-guess a saved device that looks
+        virtual (deviation-log.md #7) — a saved "device" value, whatever
+        it is, is trusted verbatim exactly as source always did, because
+        it may reflect a deliberate manual choice (the combobox stays
+        editable specifically so a user can pick any enumerated port,
+        virtual ones included) and there is no way to tell that apart
+        from a stale bad default after the fact. What *is* hardened is
+        the narrower, unambiguous case of nothing saved to honor at all
+        (no "device" key, or an empty one) — that falls back to
+        `self._auto_default_device`, the real-hardware-preferring pick
+        computed in __init__, instead of an empty string.
         """
         path = config_path()
         if os.path.exists(path):
@@ -244,7 +311,8 @@ class WinKeyer(QtWidgets.QMainWindow):
         else:
             with open(path, "wt", encoding="utf-8") as file_handle:
                 file_handle.write(json.dumps(self.settings_dict))
-        self.device = self.settings_dict["device"]
+        self.device = self.settings_dict.get("device") or self._auto_default_device
+        self.settings_dict["device"] = self.device
         self.msg1.setText(self.settings_dict.get("1"))
         self.msg2.setText(self.settings_dict.get("2"))
         self.msg3.setText(self.settings_dict.get("3"))
