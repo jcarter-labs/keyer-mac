@@ -152,7 +152,6 @@ class WinKeyer(QtWidgets.QMainWindow):
     oldtext = ""
     port = None
     initialpot = False
-    settings_dict = {"device": "", "1": "", "2": "", "3": "", "4": "", "5": "", "6": ""}
 
     def __init__(self, *args, **kwargs):
         """
@@ -160,6 +159,11 @@ class WinKeyer(QtWidgets.QMainWindow):
         queries for existing serial ports.
         loads in saved defaults.
         """
+        # A fresh dict per instance — source declared this as a mutable class
+        # attribute, which is harmless for the single instance a real run
+        # creates but corrupts state across instances (Task 5's tests caught
+        # this: see deviation-log.md #4).
+        self.settings_dict = {"device": "", "1": "", "2": "", "3": "", "4": "", "5": "", "6": ""}
         self.working_path = Path(os.path.dirname(os.path.abspath(__file__)))
 
         data_path = self.working_path / "main.ui"
@@ -575,27 +579,19 @@ class WinKeyer(QtWidgets.QMainWindow):
             a0.accept()
 
 
-app = QtWidgets.QApplication(sys.argv)
-keyer = WinKeyer()
-keyer.show()
-
 import signal
 
-
-def handle_sigint(_signum, _frame):
-    keyer._shutdown()
-
-
-# Register before host_init so Ctrl+C during startup is handled cleanly.
-signal.signal(signal.SIGINT, handle_sigint)
-signal.signal(signal.SIGTERM, handle_sigint)
-
-keyer.host_init()
-if keyer.port:
-    keyer.setmode()
-rpcwidget = RPCWidget()
-timer = QTimer()
-timer.timeout.connect(keyer.checkmessage)  # Do not do this.
+# These start as None so importing this module (as tests do, to reach the
+# WinKeyer/Settings classes) never creates a QApplication, opens the real
+# serial port, or binds the real XMLRPC server — only main() does that, and
+# main() only ever runs via `python3 -m keyer_mac` (Constitution rule 10).
+# Source ran all of this at module level, since it was written as a script,
+# never meant to be imported; ported behavior is unchanged, only *when* it
+# runs has moved.
+app = None
+keyer = None
+rpcwidget = None
+timer = None
 
 
 def setspeed(speed) -> None:
@@ -623,8 +619,33 @@ def sendblended(msg) -> None:
     keyer.sendblended(msg)
 
 
+def _handle_sigint(_signum, _frame):
+    keyer._shutdown()
+
+
 def main():
     """Main entry"""
+    global app, keyer, rpcwidget, timer
+
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    # instance()-or-construct is a test-only seam: a real run always has no
+    # existing QApplication, so this is identical to source's plain
+    # QApplication(sys.argv). It only matters when pytest imports this module
+    # more than once per process — Qt raises on a second bare constructor call.
+    keyer = WinKeyer()
+    keyer.show()
+
+    # Register before host_init so Ctrl+C during startup is handled cleanly.
+    signal.signal(signal.SIGINT, _handle_sigint)
+    signal.signal(signal.SIGTERM, _handle_sigint)
+
+    keyer.host_init()
+    if keyer.port:
+        keyer.setmode()
+    rpcwidget = RPCWidget()
+    timer = QTimer()
+    timer.timeout.connect(keyer.checkmessage)  # Do not do this.
+
     timer.start(250)
     app.exec()
 

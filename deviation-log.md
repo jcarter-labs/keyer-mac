@@ -43,3 +43,24 @@ already-documented protocol — but every hardware-facing method stays
 marked unverified (rule 9) in code and commit messages until Task 2's live
 diagnostic passes. Not a rejected alternative, just an accepted ordering
 consequence of deferring Task 2 on operator instruction.
+
+## 4. Rule 9/10 vs a latent source bug (mutable class-attribute default)
+
+**Rule:** Every new piece of logic ships with at least one test (Standing
+Bars); tests touch only project/runner temp dirs (rule 10).
+**Conflict:** Source declares `settings_dict = {...}` as a `WinKeyer`
+class attribute rather than setting it in `__init__`. Invisible in real
+usage (`python3 -m keyer_mac` only ever creates one instance per
+process), but Task 5's dotfile-round-trip test — which creates multiple
+`WinKeyer()` instances in one process — caught it directly: a value
+written by one instance leaked into a second instance's freshly-written
+defaults, because both were mutating the same shared dict object.
+**Decision:** Fixed, not ported as-is — moved the dict literal into
+`__init__` so each instance gets its own. Zero behavior change for the
+single-instance production path (the values and shape are identical);
+this is a bug fix the test suite paid for itself, not a "kept for
+parity" quirk like the three in §2.
+**Rejected alternative:** Leave the class attribute as source has it and
+work around the sharing in test fixtures (e.g. reset it between tests) —
+rejected as preserving a real bug for tests to keep dodging, for no
+production benefit.
