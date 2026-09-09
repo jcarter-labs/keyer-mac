@@ -138,8 +138,13 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    direct port, since it's the same __init__ that connects signals.
    Verified: headless smoke test against real hardware, clean shutdown,
    exit 0 — see the `feat: port WinKeyer class` commit.
-4. First runnable UI → Spec §2 — port main.ui/settings.ui, wire buttons,
-   add the verified run command to README.
+4. First runnable UI → Spec §2 — DONE. `.ui` port and button wiring
+   landed in Task 3 (same __init__ that ported everything else); the
+   remaining piece — the verified run command in README — added now.
+   Confirmed by a real (non-headless) run against the physical WinKeyer:
+   window opens titled "keyer-mac", device auto-detected, speed spinbox
+   synced live to the pot position, all 6 message fields/buttons and
+   the settings gear present.
 5. Tests — logic-only unit tests (mode-register bits, dotfile
    round-trip) run mocked/headless (QT_QPA_PLATFORM=offscreen); serial
    and XMLRPC behavior stay covered only by Task 2's live diagnostic, per
