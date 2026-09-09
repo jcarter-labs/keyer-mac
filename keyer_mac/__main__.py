@@ -193,6 +193,16 @@ class WinKeyer(QtWidgets.QMainWindow):
         self.sendmsg6_button.clicked.connect(self.sendmsg6)
         self.settings_gear.clicked.connect(self.edit_configuration_settings)
         self.inputbox.textChanged.connect(self.handle_text_change)
+        # Speed-control arbitration (deviation-log.md #6): a WK-mini with no
+        # physical pot still emits pot-status bytes off its floating ADC
+        # line, which would otherwise permanently overwrite the spinbox
+        # every 100ms poll. Track each source's own last value and only
+        # act on a genuine change from that source, so a stale/repeated
+        # pot echo can't reclobber a manual speed change, while a real pot
+        # movement (if a unit has one) still takes control as source intends.
+        self._last_pot_speed = None
+        self._last_manual_speed = None
+        self._suppress_spinbox_signal = False
         self.spinBox_speed.valueChanged.connect(self.spinboxspeed)
         self.spinBox_speed.setValue(20)
         self._shutting_down = False
@@ -356,20 +366,42 @@ class WinKeyer(QtWidgets.QMainWindow):
         if hasattr(self.port, "write"):
             command = chr(2) + chr(int(speed))
             self._port_write(command.encode())
+            self._suppress_spinbox_signal = True
             self.spinBox_speed.setValue(int(speed))
+            self._suppress_spinbox_signal = False
 
     def potspeed(self, speed):
         """
         The pot speed value is the 6 LSB of the returned byte.
-        It has the 2 MSB of the byte set to 10
+        It has the 2 MSB of the byte set to 10.
+
+        Only acts on a genuine change from the pot's own last-reported
+        value — a WK-mini with no physical pot still emits status bytes
+        off its floating ADC line, and without this check that stale,
+        repeated reading would permanently overwrite any speed set from
+        the spinbox or XMLRPC (see deviation-log.md #6).
         """
-        self.setspeed(speed - 123)
+        wpm = speed - 123
+        if wpm == self._last_pot_speed:
+            return
+        self._last_pot_speed = wpm
+        self.setspeed(wpm)
 
     def spinboxspeed(self):
         """
-        User changed the speed value in the spinbox.
+        User changed the speed value in the spinbox — or this fired
+        because setspeed() just updated the displayed value itself (pot
+        or XMLRPC driven); only treat it as a real manual change, and
+        re-send, when it's not our own echo and the value actually moved
+        (see deviation-log.md #6).
         """
-        self.setspeed(self.spinBox_speed.value())
+        if self._suppress_spinbox_signal:
+            return
+        wpm = self.spinBox_speed.value()
+        if wpm == self._last_manual_speed:
+            return
+        self._last_manual_speed = wpm
+        self.setspeed(wpm)
 
     def setmode(self):
         """

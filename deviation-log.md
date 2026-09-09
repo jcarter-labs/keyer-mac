@@ -89,3 +89,36 @@ worse failure than the three quirks kept for parity in §2.
 unlike the WinKeyer protocol quirks, an app-wide abort() over a
 recoverable network condition serves no fidelity purpose and had
 already produced two real crash reports before this fix.
+
+## 6. Rule 9 vs a phantom pot line permanently overriding manual speed
+
+**Rule:** Standing Bar — a control that can never actually be used isn't
+a control. More generally, source's design (per its own docstring —
+"the speed pot should work to change the code speed on the fly")
+assumes a real potentiometer that only reports on an actual knob turn.
+**Conflict:** Operator's WK-mini has no physical speed pot. Its ADC pot
+input still floats/reads something, and the WinKeyer keeps reporting
+that reading as an unsolicited pot-status byte on `getwaiting()`'s
+100ms poll. Source's `potspeed()` unconditionally calls `setspeed()` on
+every such byte, so the spinbox (and the device's actual speed) snapped
+back to a stale phantom reading (35 WPM) every 100ms, making the
+on-screen spinbox — the only speed control this hardware has — useless.
+**Decision:** Track the last value each source (pot, spinbox) actually
+reported, and only apply+broadcast a change when a source's new value
+differs from its own last one. A stale, repeated pot echo is now
+ignored; a genuine change on either line — a real knob turn on units
+that have one, or a manual spinbox edit — still takes control exactly
+as source intended. Symmetric by construction, so it costs nothing for
+hardware with a working pot.
+**Rejected alternative:** Ignore all pot-status bytes / only apply the
+pot reading once at startup — rejected because it would silently break
+live pot control on any WK unit that has a real, working potentiometer,
+which is exactly the behavior source's docstring calls out as a
+deliberate feature, not incidental.
+
+Separately noted, not yet acted on: `main.ui`'s `spinBox_speed` widget
+caps at 35 WPM (`minimum=5`, `maximum=35`), verbatim from source,
+independent of POTSET's configured 5-55 WPM hardware range (§2). This
+own-range mismatch predates today's fix and still limits the on-screen
+control to 35 WPM max regardless of arbitration; raising it to match
+POTSET's range is a candidate follow-up, pending operator decision.
