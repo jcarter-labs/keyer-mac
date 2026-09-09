@@ -129,10 +129,15 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    server on 0.0.0.0:8000 answered a real k1elsendstring("TEST") call
    with the device not wired to a radio (operator-confirmed before
    sending).
-3. Core logic → Spec §2–3 — port WinKeyer class (send, sendblended,
-   tuneon/off, clearbuffer, setspeed, potspeed, mode-register bit
-   packing), settings dialog, ~/.keyer-mac.json dotfile persistence
-   (Spec §4).
+3. Core logic → Spec §2–3 — DONE. Ported WinKeyer class (send,
+   sendblended, tuneon/off, clearbuffer, setspeed, potspeed, mode-
+   register bit packing), settings dialog, and ~/.keyer-mac.json
+   dotfile persistence (Spec §4) with the KEYER_MAC_CONFIG_PATH seam.
+   main.ui/settings.ui also ported here (needed to load the class at
+   all) — button wiring (Task 4's stated scope) came along with the
+   direct port, since it's the same __init__ that connects signals.
+   Verified: headless smoke test against real hardware, clean shutdown,
+   exit 0 — see the `feat: port WinKeyer class` commit.
 4. First runnable UI → Spec §2 — port main.ui/settings.ui, wire buttons,
    add the verified run command to README.
 5. Tests — logic-only unit tests (mode-register bits, dotfile
