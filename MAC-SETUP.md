@@ -1,8 +1,8 @@
-# Mac setup
+# Mac setup — keyer-mac
 
-Bringing up a new Mac as a `jcarter-labs` dev machine, using this repo as
-`~/Projects`. Each step assumes the previous one is verified before moving
-on — paste real output, don't just eyeball it.
+Bringing up a dev environment for keyer-mac on a Mac. Each step assumes
+the previous one is verified before moving on — paste real output, don't
+just eyeball it.
 
 ## 1. Prerequisites
 
@@ -12,11 +12,9 @@ Install via [Homebrew](https://brew.sh) if not already present:
 brew install git gh python@3.13
 ```
 
-- `git` ≥ 2.28 (needed for `git init -b main`, used by `scripts/new-repo.sh`)
-- `gh` (GitHub CLI)
-- `python@3.13` (matches the Windows machine's toolchain; `scripts/new-repo.sh`
-  falls back to plain `python3`/`python` if a versioned binary isn't found,
-  but pin 3.13 to stay in sync)
+- `git` and `gh` (GitHub CLI), authenticated to the `jcarter-labs` account
+  per `~/Projects/CLAUDE.md`'s Environment Preflight
+- `python@3.13` (Spec §1 target: Python 3.13+)
 - Claude Code CLI, installed and logged in
 
 Verify:
@@ -24,92 +22,68 @@ Verify:
 ```
 git --version
 gh --version
+gh auth status
 python3.13 --version   # or: python3 --version
 claude --version
 ```
 
-## 2. Git identity
+## 2. Clone this repo
 
 ```
-git config --global user.name  "John Carter"
-git config --global user.email "jcfrgmn@gmail.com"
+cd ~/Projects
+git clone git@github.com:jcarter-labs/keyer-mac.git
 ```
 
-Confirm: `git config user.name` / `git config user.email`.
+(Already present if you're reading this from an existing checkout.)
 
-## 3. GitHub auth
-
-```
-gh auth login
-```
-
-Choose: GitHub.com → HTTPS → authenticate via browser. Scopes needed:
-`repo`, `workflow` (add `delete_repo` too if you want `gh repo delete` to
-work from this machine — it's a separate scope GitHub doesn't grant by
-default).
-
-Verify: `gh auth status` — should show `jcarter-labs` account, https
-protocol, active.
-
-## 4. Clone this repo as `~/Projects`
+## 3. Create the venv and install dependencies
 
 ```
-cd ~
-git clone https://github.com/jcarter-labs/dev-environment.git Projects
+cd ~/Projects/keyer-mac
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install PyQt6 pyserial
 ```
-
-This is the same mechanism as any other machine picking up this repo — no
-Mac-specific step here. `CLAUDE.md`'s Environment Preflight and
-`scripts/new-repo.sh`'s path handling both already branch on OS (see
-`README.md`'s Platform notes), so nothing needs editing after clone.
 
 Verify:
 
 ```
-cd ~/Projects
-git rev-parse --show-toplevel   # should print .../Projects
-git remote get-url origin       # should print the dev-environment URL
+source .venv/bin/activate
+python3 --version              # expect 3.13.x
+python3 -c "import PyQt6; import serial; print('PyQt6 + pySerial OK')"
 ```
 
-## 5. Confirm the script is executable and portable
+Pinned versions land in `requirements.txt`/`requirements-lock.txt` once
+Task 3 (core logic port) is underway — see `masterplan-seed.md` Tech §2.
 
-Git preserves the executable bit and LF line endings across the clone (see
-this repo's `.gitattributes`), so this should already work:
+## 4. K1EL WinKeyer hardware (when connecting)
 
-```
-ls -l scripts/new-repo.sh   # expect -rwxr-xr-x
-bash -n scripts/new-repo.sh && echo "syntax OK"
-```
-
-If the executable bit didn't survive for some reason: `chmod +x
-scripts/new-repo.sh`.
-
-## 6. Live-test with a throwaway project
+Spec §3 targets a USB/serial K1EL WinKeyer at a macOS device path (e.g.
+`/dev/cu.usbserial-*`, not the Linux-style `/dev/ttyUSB0` the source
+project uses). List candidate devices:
 
 ```
-./scripts/new-repo.sh mac-setup-test
+ls /dev/cu.*
 ```
 
-Expect: directory created at `~/Projects/mac-setup-test`, a Python 3.13
-venv, an initial commit, and a private `jcarter-labs/mac-setup-test` repo
-on GitHub with that commit pushed. The script prints `OK: ... ready` with
-the toplevel/origin/python/venv it verified — paste that output before
-trusting the machine for real work.
+Task 2 (external interfaces / live diagnostic) is deferred until the
+device is physically connected — see `masterplan-seed.md` Tasks.
 
-Clean up afterward:
+## 5. Reference clone (build reference only, not part of this repo)
+
+`pywinkeyerserial/` is a clone of
+[mbridak/PyWinKeyerSerial](https://github.com/mbridak/PyWinKeyerSerial),
+kept alongside this project purely as a build reference (see `README.md`
+and `masterplan-seed.md`). It's excluded in `.gitignore` and is never
+part of keyer-mac's own history:
 
 ```
-rm -rf ~/Projects/mac-setup-test
-gh repo delete jcarter-labs/mac-setup-test --yes   # needs delete_repo scope
+git clone https://github.com/mbridak/PyWinKeyerSerial.git pywinkeyerserial
 ```
 
-If `gh repo delete` fails on scope, delete the repo manually at
-`https://github.com/jcarter-labs/mac-setup-test/settings`.
+## 6. From here
 
-## 7. From here
-
-`~/Projects/CLAUDE.md` governs every session under this directory —
-Claude Code picks it up automatically. `scripts/new-repo.sh <name>` is the
-entry point for every new project. Edits to either should be committed and
-pushed from whichever machine made them, and pulled on the other (see
-`README.md`'s "Keeping machines in sync").
+`masterplan-seed.md` governs the build (Constitution, Spec, Tech, Tasks).
+`deviation-log.md` records every place this port deviates from source.
+Config at runtime lives at `~/.keyer-mac.json`, matching the source's
+dotfile approach.
