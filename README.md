@@ -1,38 +1,20 @@
-# dev-environment
+# keyer-mac
 
-Shared Claude Code scaffolding for the `jcarter-labs` account: the
-directory-level `CLAUDE.md` rules plus the tooling they reference
-(`scripts/new-repo.sh`, `templates/`). One source of truth, cloned as
-`~/Projects` on every machine.
+A macOS PyQt6 app that talks to a K1EL WinKeyer over serial, sends typed
+and canned CW messages, and exposes a local XMLRPC bridge for logging
+software macros.
 
-## Setting up a new machine
+This is a macOS port of Michael Bridak's (K6GTE) **PyWinKeyerSerial**:
+https://github.com/mbridak/PyWinKeyerSerial. Core logic (WinKeyer
+protocol, mode-register bit packing, XMLRPC bridge) is ported directly
+from that project to preserve proven protocol behavior; see
+`masterplan-seed.md` for the full plan and `deviation-log.md` for every
+place this port deviates from the source.
 
-```
-cd ~
-git clone https://github.com/jcarter-labs/dev-environment.git Projects
-```
+## License
 
-Project subdirectories (each its own separate git repo, e.g. from
-`scripts/new-repo.sh <name>`) live inside `~/Projects` alongside this
-repo's files but are not part of its history — this repo tracks only
-`CLAUDE.md`, `scripts/`, and `templates/`.
+GPL-3.0-or-later, inherited from the source project. See `LICENSE`.
 
-## Keeping machines in sync
+## Status
 
-Edit `CLAUDE.md` or the scripts on whichever machine, then:
-
-```
-git add -A
-git commit -m "..."
-git push
-```
-
-and `git pull` on the other machine. A `git diff` against `origin/main`
-shows any drift before it becomes a surprise.
-
-## Platform notes
-
-`CLAUDE.md`'s Environment Preflight and `scripts/new-repo.sh` both branch
-on OS where the underlying check differs (Windows: `winget`/registry PATH,
-Git Bash's `pwd -W`; macOS/Linux: `brew`, plain `pwd`). Keep both branches
-in sync when either one changes.
+In development — see `masterplan-seed.md` Tasks for current progress.

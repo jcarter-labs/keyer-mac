@@ -9,6 +9,9 @@ __pycache__/
 # --- Virtual environment (never committed) ---
 .venv/
 
+# --- Reference clone (read-only build reference, not vendored) ---
+pywinkeyerserial/
+
 # --- Secrets / local config ---
 .env
 .env.*
