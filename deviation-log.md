@@ -220,3 +220,84 @@ fragments (e.g. `wchusbserial`, `SLAB_USBtoUART`) as the primary signal
 — macOS-specific, doesn't generalize to Linux/Windows naming, and is
 strictly weaker evidence than `vid`, which pyserial reports the same way
 cross-platform.
+
+## 8. Rule 9 vs a reconnect storm in getwaiting()'s bare-except path
+
+**Rule:** A recoverable condition shouldn't cost more than the feature it
+belongs to (§5); mark unverified behavior unverified (rule 9).
+**Conflict:** §2 kept source's bare `except:` in `getwaiting()` for parity
+— any exception triggers an unconditional `host_init()`. Confirmed live
+tonight: two `"... is open but WinKeyer is not responding"` warnings
+6 seconds apart from a session that had opened cleanly ~60s earlier, with
+no user action in between. That warning only ever prints inside
+`host_open()`, only ever reached from `host_init()` — proving `host_init()`
+fired repeatedly during otherwise-normal operation. Root cause of the
+*storm* (as opposed to the single triggering error) is structural, not
+guesswork: if a reopen's `serial.Serial().open()` fails, `host_init()`
+sets `self.port = False` and returns *without* restarting `timer2` — but
+`timer2` was already running from the prior successful open and keeps
+firing every 100ms regardless. The next tick calls `getwaiting()`, which
+does `self.port.in_waiting` on a bool, raising `AttributeError`; source's
+bare except catches that too and calls `host_init()` again — a tight loop
+on a device that may not even be there, gated by nothing. Separately, a
+non-blocking read (`timeout=0`) can report `in_waiting > 0` and then have
+`read(1)` come back empty by the time it executes; source's `byte[0]`
+would raise `IndexError` on that empty result and get the same
+misdiagnosis-as-hardware-fault treatment.
+**Decision (why the underlying error is plausible, not just the storm):**
+Hypothesis, *not confirmed against real hardware in this worktree*
+(no live serial access here by design) — one or more of: macOS USB power
+management suspending an idle FTDI adapter; the fixed 0.5s post-open
+settle time being sized for a cold DTR-reset boot, not a mid-session
+reopen where the WinKeyer/bridge may need longer; or a genuine
+intermittent USB dropout on hardware that already showed marginal
+connections elsewhere tonight (separately fixed). The fix targets the
+storm and the misdiagnosis regardless of which of these is the actual
+trigger:
+1. Narrowed `getwaiting()`'s except to `serial.SerialException` — verified
+   against the installed pyserial 3.5 source that its POSIX backend wraps
+   every real read/disconnect condition (including "device reports
+   readiness to read but returned no data") in `SerialException` or a
+   subclass (`PortNotOpenError`, `SerialTimeoutException`), which itself
+   subclasses `OSError`; nothing serial-layer is missed, but an unrelated
+   app bug (`AttributeError`/`IndexError`/etc.) now surfaces instead of
+   being silently relabeled a hardware fault.
+2. `self.port` being falsy/not-open is now checked explicitly at the top
+   of `getwaiting()` instead of relying on the `AttributeError` it used to
+   throw — routed through the same reconnect gate as a caught exception,
+   not a special case.
+3. An in_waiting-but-empty `read()` now returns early instead of indexing
+   into an empty result.
+4. Added a reconnect backoff: `_register_reconnect_failure()`/
+   `_register_reconnect_success()` track consecutive failures and gate
+   further automatic attempts (`_attempt_reconnect()`, called only from
+   `getwaiting()`) behind an exponential wait (1s, 2s, 4s, ... capped at
+   30s), reset to zero on the first `host_open()` that gets a non-empty
+   version response. An explicit/first `host_init()` call (`main()` at
+   startup, `change_serial()` from the UI) is never gated — only the
+   automatic path is throttled, and re-picking the device in the combo box
+   remains an always-available manual override.
+5. `host_init(is_reconnect=...)`: a reconnect gets a longer pre-version-read
+   settle (1.5s vs. 0.5s) than a first/cold-boot open, on the settle-timing
+   hypothesis above.
+**Rejected alternative:** Stop retrying permanently after N failures
+("port physically gone" hard-stop) — rejected because there is no UI
+affordance to signal that or let the operator force a retry beyond
+re-picking the device (which already bypasses the gate), so a hard stop
+would require watching the log/combo-box to notice the keyer silently
+gave up; bounded exponential backoff degrades gracefully instead and
+costs nothing once the device is genuinely gone (30s cap, not zero).
+**Rejected alternative:** Catch `(serial.SerialException, OSError)` for
+extra safety margin across platforms — rejected once the installed
+pyserial source showed `SerialException` already subclasses `OSError`
+and its POSIX backend never raises a bare unwrapped `OSError` out of
+`read()`; adding `OSError` back would have re-widened the catch to
+include unrelated errors (e.g. a stray file I/O failure) that rule 9
+specifically wants surfaced, not masked.
+**Unverified:** the settle-timing lengthening and the USB-power-management/
+intermittent-dropout hypotheses are reasoned from the log evidence and
+pyserial's source, not confirmed against the operator's WK-mini — this
+worktree deliberately does not open `/dev/cu.usbserial-8340` while the
+operator has a live session on it. Flagging per rule 9: needs a live
+soak-test confirmation before this is treated as closed rather than
+mitigated.

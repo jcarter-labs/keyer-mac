@@ -238,6 +238,20 @@ class WinKeyer(QtWidgets.QMainWindow):
         self._shutting_down = False
         self._write_timeout_logged = False
         self.last_tx_time = 0.0
+        # Reconnect backoff/settle state (deviation-log.md #8): getwaiting()'s
+        # error path used to call host_init() unconditionally on every
+        # failure, up to every 100ms (timer2's period) — a failing reopen
+        # that itself fails to get a version response re-arms the same
+        # 100ms poll, which can then hit the same error again immediately.
+        # These fields throttle that path without touching a first/explicit
+        # host_init() call (main() at startup, change_serial() from the UI).
+        self._reconnect_attempt = 0
+        self._next_reconnect_time = 0.0
+        self._reconnect_backoff_base_s = 1.0
+        self._reconnect_backoff_max_s = 30.0
+        self._is_reconnect = False
+        self._first_open_settle_s = 0.5
+        self._reconnect_settle_s = 1.5
         self.timer2 = QTimer()
         self.timer2.timeout.connect(self.getwaiting)
         # Auto-selection default when there is nothing better to go on yet
@@ -341,10 +355,18 @@ class WinKeyer(QtWidgets.QMainWindow):
             file_handle.write(json.dumps(self.settings_dict))
         self.setmode()
 
-    def host_init(self):
+    def host_init(self, is_reconnect=False):
         """
-        Opens the serial port and sets its parameters
+        Opens the serial port and sets its parameters.
+
+        is_reconnect: True when this call originates from getwaiting()'s
+        error-recovery path rather than a first/explicit open (startup,
+        or the user picking a device in the combo box). host_open() uses
+        it to allow more settle time before judging the keyer unresponsive
+        (deviation-log.md #8) — a reconnect may follow a mid-transaction
+        error, unlike a cold boot.
         """
+        self._is_reconnect = is_reconnect
         self.outputbox.clear()
         self.comboBox_device.blockSignals(True)
         index = self.comboBox_device.findText(self.device)
@@ -371,12 +393,14 @@ class WinKeyer(QtWidgets.QMainWindow):
                 msg = f"Unable to open serial port: {self.device}"
                 logging.warning(msg)
                 self.outputbox.insertPlainText(msg)
+                self._register_reconnect_failure()
                 return
         except serial.serialutil.SerialException:
             msg = f"Unable to open serial port: {self.device}"
             logging.warning(msg)
             self.outputbox.insertPlainText(msg)
             self.port = False
+            self._register_reconnect_failure()
             return
         self.host_open()
 
@@ -388,7 +412,13 @@ class WinKeyer(QtWidgets.QMainWindow):
         time.sleep(1)  # wait for the keyer to reset.
         command = b"\x00\x02"
         self._port_write(command)
-        time.sleep(0.5)
+        # A reconnect (vs. a cold boot) may follow a read/write error that
+        # left the WinKeyer or the USB-serial bridge mid-transaction; give
+        # it more time to settle before judging it unresponsive. HYPOTHESIS,
+        # not confirmed against real hardware in this worktree (task rule:
+        # no live serial port here) — see deviation-log.md #8.
+        settle_s = self._reconnect_settle_s if self._is_reconnect else self._first_open_settle_s
+        time.sleep(settle_s)
         self.version = self.port.read(255)
         if self.version == b"":  # No version... Maybe the wrong serial port was chosen.
             msg = f"{self.device} is open but WinKeyer is not responding"
@@ -398,6 +428,9 @@ class WinKeyer(QtWidgets.QMainWindow):
             logging.warning(msg)
             self.outputbox.clear()
             self.outputbox.insertPlainText(msg)
+            self._register_reconnect_failure()
+        else:
+            self._register_reconnect_success()
         self.timer2.start(100)
 
         # Send POTSET to configure speed pot range: min=5 WPM, range=50 WPM (5-55 WPM).
@@ -408,6 +441,41 @@ class WinKeyer(QtWidgets.QMainWindow):
 
         command = b"\x07"  # have the winkeyer return the pot speed setting
         self._port_write(command)
+
+    def _register_reconnect_failure(self):
+        """
+        Record a failed (re)connect attempt and grow the backoff window
+        before getwaiting() is allowed to trigger another one automatically
+        (deviation-log.md #8). Exponential, capped at
+        _reconnect_backoff_max_s, so a device that stays gone gets polled
+        less and less often rather than every 100ms — but never stops
+        entirely, since there's no UI affordance for the operator to force
+        a retry other than re-picking the device in the combo box (which
+        calls host_init() directly and bypasses this gate anyway).
+        """
+        self._reconnect_attempt += 1
+        backoff = min(
+            self._reconnect_backoff_base_s * (2 ** (self._reconnect_attempt - 1)),
+            self._reconnect_backoff_max_s,
+        )
+        self._next_reconnect_time = time.time() + backoff
+        logging.warning(
+            "host_init: reconnect attempt #%d failed for %s, backing off %.1fs before the next automatic attempt",
+            self._reconnect_attempt,
+            self.device,
+            backoff,
+        )
+
+    def _register_reconnect_success(self):
+        """Clear backoff state once the WinKeyer responds again."""
+        if self._reconnect_attempt:
+            logging.info(
+                "host_init: %s responded again after %d failed attempt(s)",
+                self.device,
+                self._reconnect_attempt,
+            )
+        self._reconnect_attempt = 0
+        self._next_reconnect_time = 0.0
 
     def host_close(self):
         """
@@ -607,12 +675,29 @@ class WinKeyer(QtWidgets.QMainWindow):
         """
         if self._shutting_down:
             return
+        # A previous automatic reconnect (below) can leave self.port as the
+        # bool `False` (host_init()'s open() failed) rather than restarting
+        # timer2 — source's bare `except:` then caught the resulting
+        # AttributeError on `self.port.in_waiting` and called host_init()
+        # again, every 100ms, with no backoff: a tight reconnect-storm on a
+        # port that's actually gone. Handled explicitly here instead of via
+        # exception (deviation-log.md #8).
+        if not self.port or not getattr(self.port, "is_open", False):
+            self._attempt_reconnect()
+            return
         try:
             if time.time() - self.last_tx_time >= HEARTBEAT_INTERVAL_S:
                 if hasattr(self.port, "write") and self.port.is_open:
                     self._port_write(b"\x15")
             if self.port.in_waiting:
                 byte = self.port.read(1)
+                if not byte:
+                    # in_waiting said data was available but read(1) came back
+                    # empty — a benign non-blocking-read race (timeout=0), not
+                    # a device fault. Source's bare except would have treated
+                    # the resulting byte[0] IndexError as "unplugged" and
+                    # reconnected; just skip this poll instead.
+                    return
                 if (byte[0] & b"\xc0"[0]) == b"\xc0"[0]:  # Status Change
                     pass
                 elif (byte[0] & b"\xc0"[0]) == b"\x80"[0]:  # speed pot change
@@ -621,9 +706,31 @@ class WinKeyer(QtWidgets.QMainWindow):
                     if 0x20 <= byte[0] <= 0x7E:
                         # print(byte.decode(), end="", flush=True)
                         self.outputbox.insertPlainText(f"{byte.decode()}")
-        except:
+        except serial.SerialException as err:
+            # Narrowed from source's bare `except:` (deviation-log.md #2/#8):
+            # pyserial's POSIX backend raises SerialException (or a subclass —
+            # PortNotOpenError, SerialTimeoutException; both subclass it, and
+            # it subclasses OSError itself) for every genuine serial-layer
+            # fault, including "device reports readiness to read but returned
+            # no data" on a real disconnect. A bug elsewhere in this method
+            # (a real AttributeError/IndexError/etc.) now propagates instead
+            # of being silently misdiagnosed as "someone unplugged the
+            # keyer" and masked by a reconnect.
             if not self._shutting_down:
-                self.host_init()  # Some one may have unplugged the keyer.
+                logging.warning("getwaiting: serial error on %s (%s)", self.device, err)
+                self._attempt_reconnect()
+
+    def _attempt_reconnect(self):
+        """
+        Gate automatic reconnects behind the backoff window set by the last
+        failure (deviation-log.md #8), so a still-failing device is retried
+        with growing spacing instead of every 100ms (timer2's period).
+        """
+        if self._shutting_down:
+            return
+        if time.time() < self._next_reconnect_time:
+            return
+        self.host_init(is_reconnect=True)
 
     def checkmessage(self):
         """
