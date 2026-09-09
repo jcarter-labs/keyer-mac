@@ -54,13 +54,18 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
 
 1. Targets: macOS (Apple Silicon) · Python 3.13+ · PyQt6 · pySerial (pinned
    versions TBD in requirements-lock).
-2. Interface: single main window — device dropdown (top), sent-text output
-   box, free-text input box, speed spinbox, 6 canned-message
-   buttons+fields, settings gear opening a keyer-mode dialog (Iambic A/B,
-   Ultimatic, Bug, paddle swap, echo-back, autospace, CT spacing).
+2. Interface: single main window titled "keyer-mac" (replaces source's
+   .ui title property "K6GTE winkeyerserial", which had drifted from the
+   "K6GTE PyWinKeyer" shown in keyer-win-ui.png anyway) — device dropdown
+   (top), sent-text output box, free-text input box, speed spinbox, 6
+   canned-message buttons+fields, settings gear opening a keyer-mode
+   dialog (Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace,
+   CT spacing).
 3. Data: local serial connection to a K1EL WinKeyer (USB/serial, macOS
-   device path e.g. /dev/cu.usbserial-*, not /dev/ttyUSB0); local-only
-   XMLRPC server on 127.0.0.1:8000 exposing k1elsendstring, setspeed,
+   device path e.g. /dev/cu.usbserial-*, not /dev/ttyUSB0); XMLRPC server
+   bound to 0.0.0.0:8000 (source parity, chosen over localhost-only —
+   operator accepted the LAN-exposure tradeoff on 2026-09-08 rather than
+   deviate from source's binding) exposing k1elsendstring, setspeed,
    sendblended, tuneon, tuneoff, clearbuffer — no auth, no rate limit.
 4. Persistence: flat dotfile ~/.keyer-mac.json in $HOME, written whole-file
    on any message-field edit — same approach as mbridak's
@@ -82,7 +87,9 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    ├── __main__.py        # bootstrap + main window (ported from source)
    ├── settings.py        # settings dialog (direct port)
    ├── main.ui / settings.ui
-   └── resources/         # icons — .icns added for mac, source .png/.svg dropped
+   └── resources/         # icons — .icns added for mac, source .png/.svg
+                           # and JetBrainsMono-Regular.ttf dropped (system
+                           # font fallback for the settings-gear glyph)
    tests/
    tools/
    requirements.txt · requirements-lock.txt · pyproject.toml
@@ -101,6 +108,9 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    pySerial, matching source — not tkinter. Retina/HiDPI scaling is
    handled automatically by Qt6 on macOS, no Per-Monitor-v2-style manual
    scaling code needed (unlike the Windows Tk case the seed warns about).
+7. Settings dialog import: clean absolute `from keyer_mac.settings import
+   Settings` — source's script/package dual try/except import isn't
+   needed since keyer_mac has no loose-script entry point.
 
 ## Tasks
 
