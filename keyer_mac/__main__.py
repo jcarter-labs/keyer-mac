@@ -252,6 +252,23 @@ class WinKeyer(QtWidgets.QMainWindow):
         self._is_reconnect = False
         self._first_open_settle_s = 0.5
         self._reconnect_settle_s = 1.5
+        # Close/reopen race (troubleshooting-transcript.md turns 19-30,
+        # reproduced via tools/app_level_repro.py Phase 5): host_init()
+        # closing the old port and opening a new one back-to-back races
+        # macOS's CH34x DriverKit driver, which doesn't release the USB
+        # device synchronously with close() — a reopen that lands inside
+        # that window opens cleanly at the OS level but the WinKeyer never
+        # sees the reset and doesn't respond. tools/serial_isolation_diagnostic.py
+        # never hit this (it always left >=0.5s between close and reopen);
+        # a zero-gap rapid reselect reproduced it within a handful of
+        # cycles. _close_reopen_settle_s pads that specific gap;
+        # _host_open_max_attempts/_host_open_retry_delay_s retry the
+        # WinKeyer-level handshake (not the OS-level open) as a second
+        # line of defense, since a settle delay narrows the race but a
+        # fixed constant can't guarantee it never lands inside the window.
+        self._close_reopen_settle_s = 0.3
+        self._host_open_max_attempts = 3
+        self._host_open_retry_delay_s = 0.3
         self.timer2 = QTimer()
         self.timer2.timeout.connect(self.getwaiting)
         # Auto-selection default when there is nothing better to go on yet
@@ -378,6 +395,7 @@ class WinKeyer(QtWidgets.QMainWindow):
         try:
             if self.port:
                 self.port.close()
+                time.sleep(self._close_reopen_settle_s)
             self.port = serial.Serial()
             self.port.port = self.device
             self.port.baudrate = 1200
@@ -407,7 +425,49 @@ class WinKeyer(QtWidgets.QMainWindow):
     def host_open(self):
         """
         Sends the open command to winkeyer so it will start listening to us.
+
+        Retries the close/open/settle/version-read cycle
+        (_host_open_attempt()) up to _host_open_max_attempts times before
+        declaring the WinKeyer unresponsive. A single miss here is more
+        often the close-reopen driver race documented on
+        _close_reopen_settle_s above than a genuine hardware fault, so
+        retries stay silent (no log, no on-screen message, no reconnect
+        registration) until every attempt has been exhausted — only the
+        final outcome is user-visible.
         """
+        for attempt in range(1, self._host_open_max_attempts + 1):
+            self.version = self._host_open_attempt()
+            if self.version:
+                break
+            if attempt < self._host_open_max_attempts:
+                time.sleep(self._host_open_retry_delay_s)
+
+        if self.version:  # No version... Maybe the wrong serial port was chosen.
+            self._register_reconnect_success()
+        else:
+            msg = f"{self.device} is open but WinKeyer is not responding"
+            # This message previously only ever reached the on-screen output
+            # box, invisible to any terminal/log-based diagnostic — logged
+            # here too so it's observable without watching the GUI.
+            logging.warning(msg)
+            self.outputbox.clear()
+            self.outputbox.insertPlainText(msg)
+            self._register_reconnect_failure()
+        self.timer2.start(100)
+
+        # Send POTSET to configure speed pot range: min=5 WPM, range=50 WPM (5-55 WPM).
+        # Without this, the keyer uses its own default MIN_WPM which may differ from
+        # what this host assumes when decoding pot speed bytes (raw - 123 = raw - 0x80 + 5).
+        command = b"\x05\x05\x32\x00"
+        self._port_write(command)
+
+        command = b"\x07"  # have the winkeyer return the pot speed setting
+        self._port_write(command)
+
+    def _host_open_attempt(self) -> bytes:
+        """One host_close/sleep/open-command/settle/version-read cycle,
+        the unit host_open() retries. Returns the version bytes read
+        (empty on no response)."""
         self.host_close()
         time.sleep(1)  # wait for the keyer to reset.
         command = b"\x00\x02"
@@ -419,28 +479,7 @@ class WinKeyer(QtWidgets.QMainWindow):
         # no live serial port here) — see deviation-log.md #8.
         settle_s = self._reconnect_settle_s if self._is_reconnect else self._first_open_settle_s
         time.sleep(settle_s)
-        self.version = self.port.read(255)
-        if self.version == b"":  # No version... Maybe the wrong serial port was chosen.
-            msg = f"{self.device} is open but WinKeyer is not responding"
-            # This message previously only ever reached the on-screen output
-            # box, invisible to any terminal/log-based diagnostic — logged
-            # here too so it's observable without watching the GUI.
-            logging.warning(msg)
-            self.outputbox.clear()
-            self.outputbox.insertPlainText(msg)
-            self._register_reconnect_failure()
-        else:
-            self._register_reconnect_success()
-        self.timer2.start(100)
-
-        # Send POTSET to configure speed pot range: min=5 WPM, range=50 WPM (5-55 WPM).
-        # Without this, the keyer uses its own default MIN_WPM which may differ from
-        # what this host assumes when decoding pot speed bytes (raw - 123 = raw - 0x80 + 5).
-        command = b"\x05\x05\x32\x00"
-        self._port_write(command)
-
-        command = b"\x07"  # have the winkeyer return the pot speed setting
-        self._port_write(command)
+        return self.port.read(255)
 
     def _register_reconnect_failure(self):
         """

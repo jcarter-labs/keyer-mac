@@ -301,3 +301,76 @@ worktree deliberately does not open `/dev/cu.usbserial-8340` while the
 operator has a live session on it. Flagging per rule 9: needs a live
 soak-test confirmation before this is treated as closed rather than
 mitigated.
+
+## 9. Rule 9 vs a live-confirmed close/reopen race in host_init() (supersedes #8's unverified hypotheses)
+
+**Rule:** Mark unverified behavior unverified, and confirm hypotheses
+against real hardware before treating them as closed (rule 9; #8's own
+closing note).
+**Conflict:** #8 left two competing, unconfirmed hypotheses for the "is
+open but WinKeyer is not responding" warning: settle time too short, or
+macOS USB power management suspending an idle adapter. Neither was
+confirmed live. A live session this time (`troubleshooting-transcript.md`
+turns 19-30) reproduced the warning at both startup and after every
+device-combo-box reselect, then live testing against the real WK-mini
+(port confirmed free via `lsof`, no contention) determined the actual
+mechanism:
+- `tools/serial_isolation_diagnostic.py` (raw pyserial, no Qt/app code,
+  0.5s gap between every close and reopen): 8/8 clean trials, version
+  response in ~0.10s every time, across a soak test and a DTR-handling
+  sweep (dsrdtr default / no DTR / explicit pulse). This ruled out DTR
+  handling and rules out "settle time after open" as the cause — the
+  response arrives far inside even the shorter 0.5s window.
+- `tools/app_level_repro.py` (drives the real `WinKeyer` class headlessly
+  against the same hardware): cold start, 10s idle, and a single
+  device-combo-box reselect all came back clean. 15 rapid-fire reselects
+  with zero gap between them (mirroring what `host_init()` actually does
+  — `self.port.close()` immediately followed by a new `serial.Serial()`
+  and `.open()`, no delay) reproduced 4 separate failure episodes in
+  ~20s. The one variable that differed between the always-clean isolated
+  script and the reliably-failing app-level test was that gap.
+- mbridak's upstream source has the identical zero-delay close/reopen
+  (confirmed by reading `pywinkeyerserial/winkeyerserial/__main__.py` at
+  current HEAD, `632f560`) — this is an inherited bug, not something the
+  port introduced. No upstream commit fixes it: `818a0fd` ("Fix
+  re-entrant host_init() calls") added the `blockSignals()`/
+  `editingFinished` wiring keyer-mac already has, but only guards against
+  `setCurrentIndex()` re-firing `currentIndexChanged` during
+  `host_init()`, not this timing race; `ce13c9a` (keepalive) solves a
+  different problem (idle-timeout session drops, not a reopen race).
+**Decision:** Two changes to `host_init()`/`host_open()` in
+`keyer_mac/__main__.py`, verified against the exact test that reproduced
+the failure (`tools/app_level_repro.py` Phase 5, 15 rapid-fire reselects
+— 4 failures before, 0/15 clean across two consecutive runs after):
+1. `_close_reopen_settle_s = 0.3`: a pad between `self.port.close()` and
+   constructing/opening the new `serial.Serial()`, only when there's a
+   previous port to close (not on the first-ever open). Narrows the
+   demonstrated race directly.
+2. `_host_open_max_attempts = 3` / `_host_open_retry_delay_s = 0.3`:
+   `host_open()` retries the WinKeyer-level handshake
+   (`_host_open_attempt()`: host_close/sleep/write-open/settle/read)
+   rather than re-touching the OS-level port, so a retry can't
+   re-trigger the very race it's recovering from. Logging, the on-screen
+   message, and `_register_reconnect_failure()`/`_register_reconnect_success()`
+   fire once, after the retry loop concludes — not per attempt — so a
+   recovered transient miss stays silent.
+**Rejected alternative:** A longer fixed settle delay alone (e.g. 1s+,
+no retry loop) — rejected because a fixed constant narrows the race's
+window but can't guarantee landing outside it every time; the retry loop
+is what actually makes a miss invisible instead of merely less frequent.
+**Rejected alternative:** Retrying by calling `host_init()` again
+(reopening the OS-level port each retry) — rejected because that repeats
+the close/reopen race the fix targets on every retry instead of retrying
+only the protocol handshake on an already-open port.
+**Tradeoff, not yet mitigated:** a genuine hardware failure (device
+actually gone) now takes up to ~3x longer to surface — roughly 6-8s
+worst case (3 attempts x (~1s host-close wait + 0.5-1.5s settle), plus
+two 0.3s retry gaps) versus ~1.5-2.5s before. Accepted because the
+alternative was a reproducible false failure on ordinary use; flagged
+here per rule 9 rather than left implicit.
+**Verified:** live against the real WK-mini on this machine — see
+`tools/serial_isolation_diagnostic.py` and `tools/app_level_repro.py`
+Phase 5's before/after result above. #8's settle-timing and
+USB-power-management hypotheses are superseded, not confirmed — the
+actual cause was the close/reopen gap, not open-to-read timing or power
+suspend.
