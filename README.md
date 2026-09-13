@@ -26,6 +26,12 @@ and the settings gear are present. Config persists to
 `~/.keyer-mac.json` (set `KEYER_MAC_CONFIG_PATH` to redirect it, e.g.
 for tests).
 
+![keyer-mac running](keyer-mac-running.png)
+
+Screenshot from 2026-09-13: window launched with no WinKeyer attached,
+showing the "Unable to open serial port" status line, default 20 WPM
+speed, and the msg 1–6 canned-message buttons.
+
 ## License
 
 GPL-3.0-or-later, inherited from the source project. See `LICENSE`.
