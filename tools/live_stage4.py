@@ -127,7 +127,45 @@ def check_4_3() -> bool:
     return ok and ok3 and ok4
 
 
-CHECKS = {"4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3}
+def check_4_4() -> bool:
+    from keyer_mac.settings import Settings
+
+    w = start()
+    written = []
+    port = w.worker.keyer.port
+    real_write = port.write
+    port.write = lambda data: (written.append(bytes(data)), real_write(data))[1]
+
+    def accept_iambic_a(self):
+        self.key_mode.setCurrentText("Iambic A")
+        self.save_changes()
+        return 1
+
+    def cancel_bug_mode(self):
+        self.key_mode.setCurrentText("Bug Mode")
+        return 0
+
+    orig = Settings.exec
+    Settings.exec = accept_iambic_a
+    w.gear.click()
+    want = bytes([0x0E, int(w.cfg["mode_register"], 2)])
+    ok1 = wait_until(lambda: want in written, 3, "mode register written") and config.load()["mode_register"] == w.cfg["mode_register"]
+    print(f"  Save as Iambic A -> wrote {want.hex(' ')}, saved {config.load()['mode_register']}: {'PASS' if ok1 else 'FAIL'}")
+    written.clear()
+    Settings.exec = cancel_bug_mode
+    before = dict(w.cfg)
+    w.gear.click()
+    QTest.qWait(500)
+    ok2 = not any(b[:1] == b"\x0e" for b in written) and w.cfg == before
+    print(f"  Cancel after editing -> nothing written, config unchanged: {'PASS' if ok2 else 'FAIL'}")
+    Settings.exec = orig
+    w.apply_mode_register("11001110")                  # leave the keyer at the default
+    QTest.qWait(300)
+    w.shutdown()
+    return ok1 and ok2
+
+
+CHECKS = {"4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
 
 
 def main() -> int:

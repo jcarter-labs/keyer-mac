@@ -13,7 +13,10 @@ from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import (QComboBox, QGridLayout, QLabel, QLineEdit, QPlainTextEdit,
                              QPushButton, QWidget)
 
+from pathlib import Path
+
 from keyer_mac import config, winkeyer
+from keyer_mac.settings import Settings
 from keyer_mac.worker import Worker
 
 SCAN_SECONDS = 8
@@ -25,6 +28,7 @@ FIELD_BG = "#ffffff"
 FONT_FAMILY = "Arial"
 PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
 MSG_BUTTON_WIDTH = 65       # measured from keyer-mac-running.png
+SETTINGS_UI = Path(__file__).resolve().parent / "settings.ui"
 
 
 def arial(pt: int) -> QFont:
@@ -118,6 +122,11 @@ class MainWindow(QWidget):
         grid.setVerticalSpacing(4)
         self.grid = grid
 
+        # 4.4 header row 0: settings gear (Info and the port dropdown join it later)
+        self.gear = QPushButton("⚙")
+        self.gear.setFont(arial(PT_LABEL))
+        self.gear.clicked.connect(self.open_settings)
+        grid.addWidget(self.gear, 0, 2)
         self.message = MessageBox()                       # row 1
         grid.addWidget(self.message, 1, 0, 1, 6)
         self.free_label = QLabel("Free text input")       # row 2
@@ -240,6 +249,20 @@ class MainWindow(QWidget):
             self.sig_backspace.emit()
         if text:
             self.sig_send_text.emit(text)
+
+    # -- 4.4 settings dialog -----------------------------------------------------
+    def open_settings(self) -> None:
+        """Edit the keyer mode register. Save writes it to the keyer and the
+        JSON; Cancel changes nothing."""
+        pref = {"mode_register": self.cfg["mode_register"]}
+        dialog = Settings(SETTINGS_UI, pref, self)
+        if dialog.exec():
+            self.apply_mode_register(pref["mode_register"])
+
+    def apply_mode_register(self, bits: str) -> None:
+        self.cfg["mode_register"] = bits
+        config.save(self.cfg)
+        self.sig_set_mode.emit(int(bits, 2))
 
     # -- 4.3 speed -------------------------------------------------------------
     def _speed_chosen(self, _index: int) -> None:
