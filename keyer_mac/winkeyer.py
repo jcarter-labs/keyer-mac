@@ -118,10 +118,20 @@ class WinKeyer:
         self._write(HOST_CLOSE)
 
     def echo_test(self, value: int = 0x55) -> bool:
-        """Admin echo: the keyer must answer with the byte sent."""
+        """Admin echo: the keyer must answer with the byte sent. Status bytes
+        (0xc0-0xff) that arrive around the reply are skipped."""
         self.port.reset_input_buffer()
         self._write(bytes([0x00, ECHO_TEST, value]))
-        return self._read(1) == bytes([value])
+        deadline = self._clock() + self.REPLY_TIMEOUT_S
+        while self._clock() < deadline:
+            chunk = self.port.read(1)
+            if not chunk:
+                self._sleep(0.01)
+                continue
+            if chunk[0] >= 0xC0:
+                continue
+            return chunk[0] == value
+        return False
 
     def initialize(self, mode_register: int = DEFAULT_MODE_REGISTER, speed: int = DEFAULT_SPEED) -> bool:
         """After a successful host_open: send every setting, then verify.
@@ -147,3 +157,27 @@ class WinKeyer:
 
     def send_text(self, text: str) -> None:
         self._write(text.upper().encode("ascii", "ignore"))
+
+    # -- sending and status ------------------------------------------------
+    def send_blended(self, text: str) -> None:
+        """Glue characters into a prosign."""
+        self._write(b"\x1b" + text.upper().encode("ascii", "ignore"))
+
+    def backspace(self) -> None:
+        """Erase the last character from the keyer's buffer if not yet sent."""
+        self._write(b"\x08")
+
+    def tune_on(self) -> None:
+        self._write(b"\x0b\x01")
+
+    def tune_off(self) -> None:
+        self._write(b"\x0b\x00")
+
+    def clear_buffer(self) -> None:
+        self._write(b"\x0a")
+
+    def poll(self) -> str:
+        """Read whatever the keyer has sent. Returns the echoed characters;
+        status bytes (0xc0-0xff) and other control bytes are dropped."""
+        data = self.port.read(64)
+        return "".join(chr(b) for b in data if 0x20 <= b < 0x80)
