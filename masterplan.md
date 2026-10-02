@@ -30,7 +30,7 @@ Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Ari
 | 8 | Speed dropdown | combo box, even values 6–34 WPM (15 entries), default 20 | Row 2, flush right |
 | 9 | Free-text input | text edit, 3 lines, white | Row 3, full width, left-justified |
 | 10 | Message fields 1–5 | single-line text, white | Rows 4–8, left, all but the button column |
-| 11 | "msg 1" to "msg 5" | buttons, 70 pt wide | Rows 4–8, flush right, one per field |
+| 11 | "msg 1" to "msg 5" | buttons, 65 pt wide (measured) | Rows 4–8, flush right, one per field |
 | 12 | Build date | label, `YYYY-MM-DD` | Row 9, bottom-left |
 | 13 | "v1.1" | label | Row 9, bottom-right |
 
@@ -117,7 +117,7 @@ macOS on Apple Silicon only. Run from a fresh shell with `.venv` active; show pa
 | Python 3.13 | `python3 --version`, `which python3` | 3.13.x, path inside `.venv` |
 | PyQt6 6.11.0 (Qt 6.11.2, sip 13.12.0) | `python3 -c "import PyQt6.QtCore as c; print(c.PYQT_VERSION_STR)"` | `6.11.0` |
 | pySerial 3.5 | `python3 -c "import serial; print(serial.__version__)"` | `3.5` |
-| pytest, pytest-qt | `python3 -m pytest --version`, `pip show pytest-qt` | both present, pinned in the lock file |
+| pytest, pytest-qt | `python3 -m pytest --version`, `pip show pytest-qt` | both present, pinned in `requirements-dev.txt` |
 | Arial | `QFontDatabase.families()` contains "Arial" | present; else fall back to Helvetica and say so |
 | git, gh | `git --version`, `git config user.name user.email`, `gh auth status` | identity set; logged in as `jcarter-labs` |
 | Repo root | `git rev-parse --show-toplevel` | `/Users/N6YU/Projects/keyer-mac` |

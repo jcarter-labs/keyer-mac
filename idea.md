@@ -87,7 +87,7 @@ Top to bottom:
 | 1 | Message box (the sent-text display): **3 lines**, full width, read-only | left-justified text |
 | 2 | Label "Free text input" (left); label "Speed:" and speed dropdown (right) | label left; "Speed:" right-justified beside its dropdown |
 | 3 | Free-text input box: **3 lines**, full width | left-justified |
-| 4–8 | **5** rows: message field (left, most of the width) + "msg N" button (flush right, 70 px) | uniform row spacing |
+| 4–8 | **5** rows: message field (left, most of the width) + "msg N" button (flush right, 65 px) | uniform row spacing |
 | 9 | Footer: **build date** (`YYYY-MM-DD`, constant `__build_date__` beside `__version__`, not read from the clock) bottom-left; **"v1.1"** bottom-right | left / right |
 
 The window shrinks to fit the shorter boxes and one fewer message row.
