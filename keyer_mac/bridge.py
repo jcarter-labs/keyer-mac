@@ -57,6 +57,9 @@ class Bridge(QObject):
         self._thread.start()
         return True
 
+    def is_running(self) -> bool:
+        return self._server is not None
+
     def stop(self) -> None:
         if self._server:
             self._server.shutdown()

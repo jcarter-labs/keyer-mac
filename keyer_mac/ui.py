@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
-from PyQt6.QtWidgets import (QComboBox, QGridLayout, QLabel, QLineEdit, QPlainTextEdit,
-                             QPushButton, QWidget)
+from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QGridLayout, QLabel, QLineEdit,
+                             QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 from pathlib import Path
 
+import keyer_mac
 from keyer_mac import config, winkeyer
 from keyer_mac import ports as ports_mod
 from keyer_mac.bridge import Bridge
@@ -50,6 +51,54 @@ def diff_edit(old: str, new: str) -> tuple[int, str]:
             break
         common += 1
     return len(old) - common, new[common:]
+
+
+INFO_SUMMARY = "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB."
+REPO = "jcarter-labs/keyer-mac"
+REPO_URL = "https://github.com/jcarter-labs/keyer-mac"
+
+
+def info_text(port: str | None, firmware: int | None, config_file, xmlrpc: str) -> str:
+    """The Info dialog body: the summary first, then the facts."""
+    fw = f"v{winkeyer.format_version(firmware)}" if firmware is not None else "not connected"
+    methods = ", ".join(Bridge.METHODS)
+    return "\n".join([
+        INFO_SUMMARY,
+        "",
+        f"Version: {keyer_mac.__version__} ({keyer_mac.__build_date__})",
+        f"Connected port: {port or 'none'}",
+        f"WinKeyer firmware: {fw}",
+        f"Config file: {config_file}",
+        f"XMLRPC: {xmlrpc}",
+        f"XMLRPC methods: {methods}",
+        "",
+        "Designed to work with the K1EL WinKeyer Mini.",
+        "",
+        "A Mac rewrite of PyWinKeyerSerial by Michael Bridak, K6GTE "
+        "(https://github.com/mbridak/PyWinKeyerSerial). Licensed GPL-3.0-or-later: "
+        "free software, with ABSOLUTELY NO WARRANTY; see the LICENSE file.",
+        "",
+        f"Repository: {REPO}",
+        REPO_URL,
+    ])
+
+
+class InfoDialog(QDialog):
+    def __init__(self, text: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("keyer-mac info")
+        self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:{FONT_FAMILY};}}")
+        layout = QVBoxLayout(self)
+        self.body = QTextBrowser()
+        self.body.setFont(arial(PT_LABEL))
+        self.body.setStyleSheet(f"background:{FIELD_BG};")
+        self.body.setOpenExternalLinks(True)
+        self.body.setPlainText(text)
+        layout.addWidget(self.body)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.resize(560, 420)
 
 
 class MessageBox(QPlainTextEdit):
@@ -131,11 +180,19 @@ class MainWindow(QWidget):
         grid.setVerticalSpacing(4)
         self.grid = grid
 
-        # 4.4 header row 0: settings gear (Info and the port dropdown join it later)
+        # header row 0: "Message" label, Info, settings gear, port dropdown
+        self.header_label = QLabel("Message")
+        self.header_label.setFont(arial(PT_LABEL))
+        grid.addWidget(self.header_label, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.info_button = QPushButton("Info")
+        self.info_button.setFont(arial(PT_LABEL))
+        self.info_button.clicked.connect(self.open_info)
+        grid.addWidget(self.info_button, 0, 1)
         self.gear = QPushButton("⚙")
         self.gear.setFont(arial(PT_LABEL))
         self.gear.clicked.connect(self.open_settings)
         grid.addWidget(self.gear, 0, 2)
+        self._firmware: int | None = None
         # port dropdown: editable; picking or typing a port tries it at once
         self.port_box = QComboBox()
         self.port_box.setEditable(True)
@@ -286,6 +343,7 @@ class MainWindow(QWidget):
         self._scanning = False
         self._timer.stop()
         self._connected = True
+        self._firmware = version
         self.result = "found"
         self.port_box.blockSignals(True)
         self.port_box.setCurrentText(device)
@@ -306,6 +364,7 @@ class MainWindow(QWidget):
 
     def _on_disconnected(self) -> None:
         self._connected = False
+        self._firmware = None
         self.message.add_line("Keyer disconnected.")
         self._start_countdown(DISCONNECTED_PREFIX)
 
@@ -322,6 +381,16 @@ class MainWindow(QWidget):
             self.sig_backspace.emit()
         if text:
             self.sig_send_text.emit(text)
+
+    # -- 4.6 Info ---------------------------------------------------------------------
+    def info_body(self) -> str:
+        bound = self.bridge.is_running()
+        xmlrpc = f"{self.bridge.host}:{self.bridge.port}" if bound else "off (port unavailable)"
+        return info_text(getattr(self.worker, "device", None) if self._connected else None,
+                         self._firmware, config.config_path(), xmlrpc)
+
+    def open_info(self) -> None:
+        InfoDialog(self.info_body(), self).exec()
 
     # -- 4.5 XMLRPC ----------------------------------------------------------------
     def _bridge_set_speed(self, wpm: int) -> None:
