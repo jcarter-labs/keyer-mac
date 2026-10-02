@@ -101,9 +101,15 @@ moves between ports.
    Bluetooth audio).
 3. **Handshake**: Host Open and read the version byte, with the existing
    0.3 s close/reopen pad and 3 retries.
-4. **Missing**: if no WinKeyer answers, write in the message box
-   **"Keyer missing: no WinKeyer detected. Plug it in; it will connect
-   automatically."** Keep retrying with backoff (1 s doubling to 30 s).
+4. **Status in the message box** (replaces the line each second):
+   - while scanning: **"Scanning for keyer… 8"** counting down to 0 (8 s,
+     matching the worst-case handshake time);
+   - on success: **"Keyer found: WinKeyer vX.Y on <port>"**;
+   - at 0 with nothing found: **"Keyer missing: no WinKeyer detected. Plug it
+     in; it will connect automatically."** Keep rescanning (§5.1), retrying
+     with backoff (1 s doubling to 30 s); a later find replaces the message
+     with "Keyer found…". Any new scan, including a dropdown re-pick, restarts
+     the countdown at 8.
 5. **Initialize from JSON on every successful connect**, in this order: mode
    register, then speed (default 20 WPM if absent). Send every setting each
    time; never rely on what the device remembers from earlier sessions.
@@ -111,7 +117,7 @@ moves between ports.
    a WinKeyer. If a live diagnostic proves the speed can be read back, compare
    it with the value sent; if not, the check is that the writes returned
    without error and the keyer still answers an echo test afterwards. The
-   message box then shows "WinKeyer connected, vX.Y, 20 WPM".
+   message box then shows "Keyer found: WinKeyer vX.Y on <port>, 20 WPM".
 
 **Acceptance:** a re-runnable script does 50 cold starts and 50 unplug/replug
 cycles against the real WK-mini with 0 failures, and logs each result.
