@@ -161,6 +161,7 @@ class Worker(QObject):
         self.retry_scheduled.emit(delay)
         self._schedule(delay, lambda e=epoch: self._attempt(e))
 
+    @pyqtSlot()
     def close(self) -> None:
         self._epoch += 1
         self._close_port()

@@ -10,12 +10,12 @@ import sys
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
-from keyer_mac.ui import BareWindow
+from keyer_mac.ui import MainWindow
 
 
 def main() -> int:
     app = QApplication(sys.argv)
-    win = BareWindow()
+    win = MainWindow()
     autoquit = os.environ.get("KEYER_MAC_BARE_AUTOQUIT") == "1"
     shown = 0
 

@@ -4,7 +4,8 @@ a stalled port does not stop the 1 s UI ticks. Fake ports only."""
 import time
 from collections import namedtuple
 
-from keyer_mac.ui import MISSING_TEXT, BareWindow
+from keyer_mac import config
+from keyer_mac.ui import MISSING_TEXT, MainWindow
 from keyer_mac.worker import Worker
 
 P = namedtuple("P", "device vid pid")
@@ -45,7 +46,7 @@ def make_window(ports, delay_s=0.0):
         holder["port"] = FakePort(delay_s)
         return holder["port"]
 
-    w = BareWindow(Worker(open_port=open_port, list_ports=lambda: ports))
+    w = MainWindow(Worker(open_port=open_port, list_ports=lambda: ports), cfg=config.defaults())
     # fake serial waits: skip the real 1 s reset wait inside host_open
     return w, holder
 

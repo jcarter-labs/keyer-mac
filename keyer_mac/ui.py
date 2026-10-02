@@ -1,100 +1,228 @@
-"""Main window pieces (masterplan Tech, module 6). Stage 2 slice: a bare
-window with only the Message box, running the scan countdown. No serial code
-here; it talks to the Worker through signals.
+"""Main window (masterplan Tech, module 6). No serial code: it talks to the
+Worker (a QThread) and the Bridge only through signals.
+
+Built feature by feature in Stage 4; widgets sit in the rows of the Spec's
+screen list: 0 header, 1 Message box, 2 free-text label, 3 free-text box,
+4-8 messages, 9 footer.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QThread, QTimer
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QPlainTextEdit, QVBoxLayout, QWidget
+from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QTextCursor
+from PyQt6.QtWidgets import QGridLayout, QLabel, QPlainTextEdit, QWidget
 
-from keyer_mac import winkeyer
+from keyer_mac import config, winkeyer
 from keyer_mac.worker import Worker
 
 SCAN_SECONDS = 8
+SCAN_PREFIX = "Scanning for keyer… "
+DISCONNECTED_PREFIX = "Keyer disconnected. Scanning for keyer… "
 MISSING_TEXT = "Keyer missing: no WinKeyer detected. Plug it in; it will connect automatically."
 WINDOW_BG = "#ededed"
 FIELD_BG = "#ffffff"
+FONT_FAMILY = "Arial"
+PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
+
+
+def arial(pt: int) -> QFont:
+    font = QFont(FONT_FAMILY)
+    font.setPointSize(pt)
+    return font
+
+
+def diff_edit(old: str, new: str) -> tuple[int, str]:
+    """(backspaces, text to send) that turn `old` into `new` at the keyer:
+    erase back to the common prefix, then send what follows it."""
+    common = 0
+    for a, b in zip(old, new):
+        if a != b:
+            break
+        common += 1
+    return len(old) - common, new[common:]
 
 
 class MessageBox(QPlainTextEdit):
-    """Read-only, 3 lines. One status line updates in place; other text appends."""
+    """Read-only, 3 lines. The countdown updates one line in place; other
+    status lines append (identical consecutive ones are not repeated); keyer
+    echo appends to an echo line as it arrives."""
 
     def __init__(self):
         super().__init__()
         self.setReadOnly(True)
-        font = QFont("Arial")
-        font.setPointSize(16)
-        self.setFont(font)
+        self.setFont(arial(PT_ENTRY))
         self.setStyleSheet(f"background:{FIELD_BG};")
         self.setFixedHeight(3 * self.fontMetrics().lineSpacing() + 2 * self.frameWidth() + 12)
+        self.lines: list[str] = []
+        self.kinds: list[str] = []
 
-    def set_status(self, text: str) -> None:
-        self.setPlainText(text)
+    def _render(self) -> None:
+        self.setPlainText("\n".join(self.lines))
+        self.moveCursor(QTextCursor.MoveOperation.End)
+
+    def clear_all(self) -> None:
+        self.lines, self.kinds = [], []
+        self._render()
+
+    def set_countdown(self, text: str) -> None:
+        if self.kinds and self.kinds[-1] == "countdown":
+            self.lines[-1] = text
+        else:
+            self.lines.append(text)
+            self.kinds.append("countdown")
+        self._render()
+
+    def add_line(self, text: str) -> None:
+        """Append a status line; a countdown line in progress is replaced."""
+        if self.kinds and self.kinds[-1] == "countdown":
+            self.lines[-1], self.kinds[-1] = text, "line"
+        elif self.lines and self.kinds[-1] == "line" and self.lines[-1] == text:
+            return
+        else:
+            self.lines.append(text)
+            self.kinds.append("line")
+        self._render()
+
+    def add_echo(self, chars: str) -> None:
+        if self.kinds and self.kinds[-1] == "echo":
+            self.lines[-1] += chars
+        else:
+            self.lines.append(chars)
+            self.kinds.append("echo")
+        self._render()
 
 
-class BareWindow(QWidget):
-    """Message box + countdown. `lines` records every status shown (for tests)."""
+class MainWindow(QWidget):
+    sig_send_text = pyqtSignal(str)
+    sig_backspace = pyqtSignal()
+    sig_set_speed = pyqtSignal(int)
+    sig_set_mode = pyqtSignal(int)
 
-    def __init__(self, worker: Worker | None = None):
+    def __init__(self, worker: Worker | None = None, cfg: dict | None = None):
         super().__init__()
         self.setWindowTitle("keyer-mac")
-        self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:Arial;}}")
-        self.box = MessageBox()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.addWidget(self.box)
-        self.resize(579, 120)
-        self.lines: list[str] = []
-        self.result: str | None = None      # "found" / "missing"
+        self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:{FONT_FAMILY};}}")
+        self.cfg = cfg if cfg is not None else config.load()
+        self.lines: list[str] = []            # every status shown (for tests)
+        self.result: str | None = None        # "found" / "missing"
         self.remaining = SCAN_SECONDS
+        self._prefix = SCAN_PREFIX
         self._scanning = False
+        self._old_text = ""
+
+        grid = QGridLayout(self)
+        grid.setContentsMargins(15, 15, 15, 15)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(4)
+        self.grid = grid
+
+        self.message = MessageBox()                       # row 1
+        grid.addWidget(self.message, 1, 0, 1, 6)
+        self.free_label = QLabel("Free text input")       # row 2
+        self.free_label.setFont(arial(PT_LABEL))
+        grid.addWidget(self.free_label, 2, 0, 1, 3, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.free_text = QPlainTextEdit()                 # row 3
+        self.free_text.setFont(arial(PT_ENTRY))
+        self.free_text.setStyleSheet(f"background:{FIELD_BG};")
+        self.free_text.setFixedHeight(3 * self.free_text.fontMetrics().lineSpacing()
+                                      + 2 * self.free_text.frameWidth() + 12)
+        grid.addWidget(self.free_text, 3, 0, 1, 6)
+        self.free_text.textChanged.connect(self._free_text_changed)
+        self.resize(579, 220)
+
         self._thread = QThread()
         self.worker = worker or Worker()
         self.worker.moveToThread(self._thread)
+        self.sig_send_text.connect(self.worker.send_text)
+        self.sig_backspace.connect(self.worker.backspace)
+        self.sig_set_speed.connect(self.worker.set_speed)
+        self.sig_set_mode.connect(self.worker.set_mode)
         self.worker.found.connect(self._on_found)
         self.worker.missing.connect(self._on_missing)
+        self.worker.disconnected.connect(self._on_disconnected)
+        self.worker.echoed.connect(self.message.add_echo)
+        self.worker.note.connect(self._on_note)
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
 
-    def _show(self, text: str) -> None:
+    # -- status and countdown ------------------------------------------------
+    def _record(self, text: str) -> None:
         self.lines.append(text)
-        self.box.set_status(text)
 
-    def start_scan(self, saved=None, manual=None,
-                   mode_register=winkeyer.DEFAULT_MODE_REGISTER, speed=winkeyer.DEFAULT_SPEED) -> None:
-        self.remaining, self._scanning, self.result = SCAN_SECONDS, True, None
-        self._show(f"Scanning for keyer… {self.remaining}")
+    def _start_countdown(self, prefix: str) -> None:
+        self._prefix, self.remaining, self._scanning, self.result = prefix, SCAN_SECONDS, True, None
+        self._show_countdown()
         self._timer.start()
+
+    def _show_countdown(self) -> None:
+        text = f"{self._prefix}{self.remaining}"
+        self.message.set_countdown(text)
+        self._record(text)
+
+    def start_scan(self, saved=None, manual=None) -> None:
+        self.message.clear_all()
+        self._start_countdown(SCAN_PREFIX)
         if not self._thread.isRunning():
             self._thread.start()
-        self.worker.scan_requested.emit(saved, manual, mode_register, speed)
+        self.worker.scan_requested.emit(
+            saved if saved is not None else (self.cfg.get("device") or None), manual,
+            config.mode_register_int(self.cfg), self.cfg["speed"])
 
     def _tick(self) -> None:
         if self._scanning and self.remaining > 0:
             self.remaining -= 1
-            self._show(f"Scanning for keyer… {self.remaining}")
+            self._show_countdown()
 
     def _on_found(self, device: str, version: int, speed: int) -> None:
         self._scanning = False
         self._timer.stop()
         self.result = "found"
-        self._show(f"Keyer found: WinKeyer v{winkeyer.format_version(version)} on {device}, {speed} WPM")
+        self.message.clear_all()
+        text = f"Keyer found: WinKeyer v{winkeyer.format_version(version)} on {device}, {speed} WPM"
+        self.message.add_line(text)
+        self._record(text)
+        self.cfg["device"] = device          # saved only after a successful handshake
+        config.save(self.cfg)
 
     def _on_missing(self) -> None:
         self._scanning = False
         self._timer.stop()
         self.result = "missing"
-        self._show(MISSING_TEXT)
+        self.message.add_line(MISSING_TEXT)
+        self._record(MISSING_TEXT)
 
+    def _on_disconnected(self) -> None:
+        self.message.add_line("Keyer disconnected.")
+        self._start_countdown(DISCONNECTED_PREFIX)
+
+    def _on_note(self, text: str) -> None:
+        self.message.add_line(text)
+        self._record(text)
+
+    # -- 4.1 free-text sending -----------------------------------------------
+    def _free_text_changed(self) -> None:
+        new = self.free_text.toPlainText()
+        backspaces, text = diff_edit(self._old_text, new)
+        self._old_text = new
+        for _ in range(backspaces):
+            self.sig_backspace.emit()
+        if text:
+            self.sig_send_text.emit(text)
+
+    # -- lifecycle ---------------------------------------------------------------
     def shutdown(self) -> None:
         self._timer.stop()
-        self.worker.close()
-        self._thread.quit()
-        self._thread.wait(2000)
+        if self._thread.isRunning():
+            QMetaObject.invokeMethod(self.worker, "close", Qt.ConnectionType.BlockingQueuedConnection)
+            self._thread.quit()
+            self._thread.wait(2000)
+        else:
+            self.worker.close()
 
     def closeEvent(self, event):
         self.shutdown()
         super().closeEvent(event)
+
+
+BareWindow = MainWindow   # Stage 2 name, kept until the callers are updated
