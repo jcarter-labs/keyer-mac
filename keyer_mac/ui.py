@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
-from PyQt6.QtWidgets import QGridLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QWidget
+from PyQt6.QtWidgets import (QComboBox, QGridLayout, QLabel, QLineEdit, QPlainTextEdit,
+                             QPushButton, QWidget)
 
 from keyer_mac import config, winkeyer
 from keyer_mac.worker import Worker
@@ -122,6 +123,18 @@ class MainWindow(QWidget):
         self.free_label = QLabel("Free text input")       # row 2
         self.free_label.setFont(arial(PT_LABEL))
         grid.addWidget(self.free_label, 2, 0, 1, 3, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        # 4.3 speed: even values 6-34 WPM, right side of row 2
+        self.speed_label = QLabel("Speed:")
+        self.speed_label.setFont(arial(PT_LABEL))
+        grid.addWidget(self.speed_label, 2, 3, 1, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.speed_box = QComboBox()
+        self.speed_box.setFont(arial(PT_DROPDOWN))
+        self.speed_box.setStyleSheet(f"background:{FIELD_BG};")
+        for wpm in range(winkeyer.SPEED_MIN, winkeyer.SPEED_MAX + 1, 2):
+            self.speed_box.addItem(str(wpm), wpm)
+        self.speed_box.setCurrentIndex(self.speed_box.findData(self.cfg["speed"]))
+        grid.addWidget(self.speed_box, 2, 5)
+        self.speed_box.currentIndexChanged.connect(self._speed_chosen)
         self.free_text = QPlainTextEdit()                 # row 3
         self.free_text.setFont(arial(PT_ENTRY))
         self.free_text.setStyleSheet(f"background:{FIELD_BG};")
@@ -227,6 +240,24 @@ class MainWindow(QWidget):
             self.sig_backspace.emit()
         if text:
             self.sig_send_text.emit(text)
+
+    # -- 4.3 speed -------------------------------------------------------------
+    def _speed_chosen(self, _index: int) -> None:
+        """A value picked in the dropdown is sent at once and saved."""
+        wpm = self.speed_box.currentData()
+        self.cfg["speed"] = wpm
+        config.save(self.cfg)
+        self.sig_set_speed.emit(wpm)
+
+    def show_speed(self, wpm: int) -> None:
+        """Show a speed that was set elsewhere (XMLRPC): no second send."""
+        index = self.speed_box.findData(wpm)
+        if index >= 0:
+            self.speed_box.blockSignals(True)
+            self.speed_box.setCurrentIndex(index)
+            self.speed_box.blockSignals(False)
+            self.cfg["speed"] = wpm
+            config.save(self.cfg)
 
     # -- 4.2 canned messages -------------------------------------------------
     def _message_edited(self, index: int) -> None:

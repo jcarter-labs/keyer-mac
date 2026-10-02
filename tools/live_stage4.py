@@ -7,6 +7,7 @@ Config is redirected to a temp file.
 Usage: python3 tools/live_stage4.py 4.1 [4.2 ...]
 """
 
+import logging
 import os
 import sys
 import tempfile
@@ -23,6 +24,7 @@ from PyQt6.QtWidgets import QApplication
 from keyer_mac import config
 from keyer_mac.ui import MainWindow
 
+logging.basicConfig(level=logging.WARNING, format="  [log %(asctime)s.%(msecs)03d] %(message)s", datefmt="%H:%M:%S")
 app = QApplication([])
 
 
@@ -38,6 +40,7 @@ def wait_until(pred, seconds, label):
 
 
 def start() -> MainWindow:
+    print("  [start window]", flush=True)
     w = MainWindow(cfg=config.load())
     w.show()
     w.start_scan()
@@ -89,7 +92,42 @@ def check_4_2() -> bool:
     return ok1 and ok2
 
 
-CHECKS = {"4.1": check_4_1, "4.2": check_4_2}
+def check_4_3() -> bool:
+    ok = True
+    fresh = config.load()
+    w = start()
+    ok0 = w.speed_box.currentData() == 20 and fresh["speed"] == 20
+    print(f"  fresh file -> dropdown shows {w.speed_box.currentData()} (expect 20): {'PASS' if ok0 else 'FAIL'}")
+    ok = ok and ok0
+    written = []
+    port = w.worker.keyer.port
+    real_write = port.write
+    port.write = lambda data: (written.append(bytes(data)), real_write(data))[1]
+    for wpm in (6, 20, 34):
+        w.speed_box.setCurrentIndex(w.speed_box.findData(wpm))
+        good = wait_until(lambda wpm=wpm: bytes([2, wpm]) in written, 3, f"02 {wpm:02x} written")
+        saved = config.load()["speed"] == wpm
+        print(f"  chose {wpm}: wrote 02 {wpm:02x} {good}, saved {saved}: {'PASS' if good and saved else 'FAIL'}")
+        ok = ok and good and saved
+    w.shutdown()
+    w2 = MainWindow(cfg=config.load())
+    ok3 = w2.speed_box.currentData() == 34
+    print(f"  relaunch shows {w2.speed_box.currentData()} (expect 34): {'PASS' if ok3 else 'FAIL'}")
+    w2.shutdown()
+    # reconnect re-sends the saved speed: start a fresh window and read the connect bytes
+    w3 = MainWindow(cfg=config.load())
+    w3.show()
+    w3.start_scan()
+    wait_until(lambda: w3.result == "found", 10, "found")
+    ok4 = "34 WPM" in w3.lines[-1]
+    print(f"  next connect reports {w3.lines[-1]!r}: {'PASS' if ok4 else 'FAIL'}")
+    w3.speed_box.setCurrentIndex(w3.speed_box.findData(20))      # leave the keyer at 20
+    QTest.qWait(300)
+    w3.shutdown()
+    return ok and ok3 and ok4
+
+
+CHECKS = {"4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3}
 
 
 def main() -> int:
