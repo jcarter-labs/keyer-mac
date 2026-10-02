@@ -165,7 +165,25 @@ def check_4_4() -> bool:
     return ok1 and ok2
 
 
-CHECKS = {"4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
+def check_port() -> bool:
+    w = start()
+    n = len(w.lines)
+    idx = w.port_box.findText("/dev/cu.usbserial-8330")
+    w.port_box.setCurrentIndex(idx)
+    w.port_box.activated.emit(idx)                     # user picks the port
+    QTest.qWait(1500)
+    ok1 = len(w.lines) == n and w.result == "found"
+    print(f"  pick the already-connected port -> no rescan, still connected: {'PASS' if ok1 else 'FAIL'}")
+    n = len(w.lines)
+    w.port_box.lineEdit().setText("/dev/cu.does-not-exist")
+    w.port_box.lineEdit().editingFinished.emit()       # typed bogus port + Enter
+    ok2 = wait_until(lambda: w.result == "found" and any(l.startswith("Scanning") for l in w.lines[n:]), 14, "found despite bogus port")
+    print(f"  typed bogus port -> falls through to the WK-mini: {'PASS' if ok2 else 'FAIL'}")
+    w.shutdown()
+    return ok1 and ok2
+
+
+CHECKS = {"port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
 
 
 def main() -> int:

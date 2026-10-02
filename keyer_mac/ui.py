@@ -16,9 +16,11 @@ from PyQt6.QtWidgets import (QComboBox, QGridLayout, QLabel, QLineEdit, QPlainTe
 from pathlib import Path
 
 from keyer_mac import config, winkeyer
+from keyer_mac import ports as ports_mod
 from keyer_mac.settings import Settings
 from keyer_mac.worker import Worker
 
+WATCH_MS = 2000             # re-list ports this often while no keyer is connected
 SCAN_SECONDS = 8
 SCAN_PREFIX = "Scanning for keyer… "
 DISCONNECTED_PREFIX = "Keyer disconnected. Scanning for keyer… "
@@ -28,6 +30,7 @@ FIELD_BG = "#ffffff"
 FONT_FAMILY = "Arial"
 PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
 MSG_BUTTON_WIDTH = 65       # measured from keyer-mac-running.png
+PORT_BOX_WIDTH = 190        # half the 1.0 width (tools/ui_targets.json)
 SETTINGS_UI = Path(__file__).resolve().parent / "settings.ui"
 
 
@@ -104,11 +107,15 @@ class MainWindow(QWidget):
     sig_set_speed = pyqtSignal(int)
     sig_set_mode = pyqtSignal(int)
 
-    def __init__(self, worker: Worker | None = None, cfg: dict | None = None):
+    def __init__(self, worker: Worker | None = None, cfg: dict | None = None,
+                 list_ports=ports_mod.list_ports):
         super().__init__()
         self.setWindowTitle("keyer-mac")
         self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:{FONT_FAMILY};}}")
         self.cfg = cfg if cfg is not None else config.load()
+        self._list_ports = list_ports
+        self._seen_candidates: set[str] = set()
+        self._connected = False
         self.lines: list[str] = []            # every status shown (for tests)
         self.result: str | None = None        # "found" / "missing"
         self.remaining = SCAN_SECONDS
@@ -127,6 +134,17 @@ class MainWindow(QWidget):
         self.gear.setFont(arial(PT_LABEL))
         self.gear.clicked.connect(self.open_settings)
         grid.addWidget(self.gear, 0, 2)
+        # port dropdown: editable; picking or typing a port tries it at once
+        self.port_box = QComboBox()
+        self.port_box.setEditable(True)
+        self.port_box.setFont(arial(PT_DROPDOWN))
+        self.port_box.setStyleSheet(f"background:{FIELD_BG};")
+        self.port_box.setMinimumWidth(PORT_BOX_WIDTH)
+        self.port_box.setMaximumWidth(PORT_BOX_WIDTH)
+        grid.addWidget(self.port_box, 0, 3, 1, 3, Qt.AlignmentFlag.AlignRight)
+        self.refresh_ports()
+        self.port_box.activated.connect(lambda _i: self._port_chosen())
+        self.port_box.lineEdit().editingFinished.connect(self._port_chosen)
         self.message = MessageBox()                       # row 1
         grid.addWidget(self.message, 1, 0, 1, 6)
         self.free_label = QLabel("Free text input")       # row 2
@@ -185,6 +203,40 @@ class MainWindow(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
+        self._watch = QTimer(self)
+        self._watch.setInterval(WATCH_MS)
+        self._watch.timeout.connect(self._watch_ports)
+
+    # -- port dropdown and hot-plug watch ----------------------------------------
+    def refresh_ports(self) -> None:
+        """List every port (virtual ones too, with their description as a
+        tooltip), keeping the current text."""
+        current = self.port_box.currentText()
+        self.port_box.blockSignals(True)
+        self.port_box.clear()
+        for p in self._list_ports():
+            self.port_box.addItem(p.device)
+            self.port_box.setItemData(self.port_box.count() - 1, p.description, Qt.ItemDataRole.ToolTipRole)
+        self.port_box.setCurrentText(current or self.cfg.get("device", ""))
+        self.port_box.blockSignals(False)
+
+    def _port_chosen(self) -> None:
+        device = self.port_box.currentText().strip()
+        if device and device != getattr(self.worker, "device", None):
+            self.start_scan(manual=device)
+
+    def _watch_ports(self) -> None:
+        """While no keyer is connected, notice a newly enumerated WK-mini and
+        try it now instead of waiting out the retry backoff."""
+        if self._connected:
+            return
+        ports = self._list_ports()
+        candidates = {p.device for p in ports if ports_mod.is_winkeyer_candidate(p)}
+        new = candidates - self._seen_candidates
+        self._seen_candidates = candidates
+        self.refresh_ports()
+        if new:
+            self.start_scan()
 
     # -- status and countdown ------------------------------------------------
     def _record(self, text: str) -> None:
@@ -201,6 +253,9 @@ class MainWindow(QWidget):
         self._record(text)
 
     def start_scan(self, saved=None, manual=None) -> None:
+        self._connected = False
+        self._seen_candidates = {p.device for p in self._list_ports() if ports_mod.is_winkeyer_candidate(p)}
+        self._watch.start()
         self.message.clear_all()
         self._start_countdown(SCAN_PREFIX)
         if not self._thread.isRunning():
@@ -217,7 +272,11 @@ class MainWindow(QWidget):
     def _on_found(self, device: str, version: int, speed: int) -> None:
         self._scanning = False
         self._timer.stop()
+        self._connected = True
         self.result = "found"
+        self.port_box.blockSignals(True)
+        self.port_box.setCurrentText(device)
+        self.port_box.blockSignals(False)
         self.message.clear_all()
         text = f"Keyer found: WinKeyer v{winkeyer.format_version(version)} on {device}, {speed} WPM"
         self.message.add_line(text)
@@ -233,6 +292,7 @@ class MainWindow(QWidget):
         self._record(MISSING_TEXT)
 
     def _on_disconnected(self) -> None:
+        self._connected = False
         self.message.add_line("Keyer disconnected.")
         self._start_countdown(DISCONNECTED_PREFIX)
 
@@ -296,6 +356,7 @@ class MainWindow(QWidget):
     # -- lifecycle ---------------------------------------------------------------
     def shutdown(self) -> None:
         self._timer.stop()
+        self._watch.stop()
         if self._thread.isRunning():
             QMetaObject.invokeMethod(self.worker, "close", Qt.ConnectionType.BlockingQueuedConnection)
             self._thread.quit()
