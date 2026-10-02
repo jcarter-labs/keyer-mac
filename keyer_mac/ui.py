@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
-from PyQt6.QtWidgets import QGridLayout, QLabel, QPlainTextEdit, QWidget
+from PyQt6.QtWidgets import QGridLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QWidget
 
 from keyer_mac import config, winkeyer
 from keyer_mac.worker import Worker
@@ -23,6 +23,7 @@ WINDOW_BG = "#ededed"
 FIELD_BG = "#ffffff"
 FONT_FAMILY = "Arial"
 PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
+MSG_BUTTON_WIDTH = 65       # measured from keyer-mac-running.png
 
 
 def arial(pt: int) -> QFont:
@@ -128,6 +129,23 @@ class MainWindow(QWidget):
                                       + 2 * self.free_text.frameWidth() + 12)
         grid.addWidget(self.free_text, 3, 0, 1, 6)
         self.free_text.textChanged.connect(self._free_text_changed)
+
+        # 4.2 five canned messages, rows 4-8
+        self.msg_fields: list[QLineEdit] = []
+        self.msg_buttons: list[QPushButton] = []
+        for i in range(5):
+            field = QLineEdit(self.cfg.get(str(i + 1), ""))
+            field.setFont(arial(PT_ENTRY))
+            field.setStyleSheet(f"background:{FIELD_BG};")
+            button = QPushButton(f"msg {i + 1}")
+            button.setFont(arial(PT_LABEL))
+            button.setFixedWidth(MSG_BUTTON_WIDTH)
+            grid.addWidget(field, 4 + i, 0, 1, 5)
+            grid.addWidget(button, 4 + i, 5)
+            field.textChanged.connect(lambda _text, n=i: self._message_edited(n))
+            button.clicked.connect(lambda _checked=False, n=i: self.send_message(n))
+            self.msg_fields.append(field)
+            self.msg_buttons.append(button)
         self.resize(579, 220)
 
         self._thread = QThread()
@@ -207,6 +225,17 @@ class MainWindow(QWidget):
         self._old_text = new
         for _ in range(backspaces):
             self.sig_backspace.emit()
+        if text:
+            self.sig_send_text.emit(text)
+
+    # -- 4.2 canned messages -------------------------------------------------
+    def _message_edited(self, index: int) -> None:
+        """Every edit is saved at once (whole-file write)."""
+        self.cfg[str(index + 1)] = self.msg_fields[index].text()
+        config.save(self.cfg)
+
+    def send_message(self, index: int) -> None:
+        text = self.msg_fields[index].text()
         if text:
             self.sig_send_text.emit(text)
 

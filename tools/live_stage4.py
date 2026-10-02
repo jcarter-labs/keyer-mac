@@ -71,7 +71,25 @@ def check_4_1() -> bool:
     return ok1 and ok2
 
 
-CHECKS = {"4.1": check_4_1}
+def check_4_2() -> bool:
+    w = start()
+    texts = ["E", "T", "I", "M", "A"]
+    for i, t in enumerate(texts):
+        w.msg_fields[i].setText(t)
+    w.message.clear_all()
+    for i in range(5):
+        w.msg_buttons[i].click()
+    ok1 = wait_until(lambda: echo_text(w) == "ETIMA", 10, "echo ETIMA")
+    print(f"  pressed msg 1-5 -> echo {echo_text(w)!r}: {'PASS' if ok1 else 'FAIL'}")
+    w.shutdown()
+    w2 = MainWindow(cfg=config.load())            # relaunch: fields come back from the file
+    ok2 = [f.text() for f in w2.msg_fields] == texts
+    print(f"  relaunch restores {[f.text() for f in w2.msg_fields]}: {'PASS' if ok2 else 'FAIL'}")
+    w2.shutdown()
+    return ok1 and ok2
+
+
+CHECKS = {"4.1": check_4_1, "4.2": check_4_2}
 
 
 def main() -> int:
