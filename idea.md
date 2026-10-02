@@ -88,7 +88,7 @@ Top to bottom:
 | 2 | Label "Free text input" (left); label "Speed:" and speed dropdown (right) | label left; "Speed:" right-justified beside its dropdown |
 | 3 | Free-text input box: **3 lines**, full width | left-justified |
 | 4–8 | **5** rows: message field (left, most of the width) + "msg N" button (flush right, 70 px) | uniform row spacing |
-| 9 | Footer: **today's date** (`YYYY-MM-DD`, from the system clock at launch) bottom-left; **"v1.1"** bottom-right | left / right |
+| 9 | Footer: **build date** (`YYYY-MM-DD`, constant `__build_date__` beside `__version__`, not read from the clock) bottom-left; **"v1.1"** bottom-right | left / right |
 
 The window shrinks to fit the shorter boxes and one fewer message row.
 The version string lives in one constant, `__version__ = "1.1"`.
@@ -129,8 +129,9 @@ moves between ports.
    without error and the keyer still answers an echo test afterwards. The
    message box then shows "Keyer found: WinKeyer vX.Y on <port>, 20 WPM".
 
-**Acceptance:** a re-runnable script does 50 cold starts and 50 unplug/replug
-cycles against the real WK-mini with 0 failures, and logs each result.
+**Acceptance:** a re-runnable script does 50 cold starts and 50 port
+close/reopen cycles against the real WK-mini, plus 3 manual unplug/replug
+cycles by the operator, with 0 failures, and logs each result.
 "100%" means zero failures in that run, not a guarantee beyond it.
 
 ## Open items
@@ -138,7 +139,7 @@ cycles against the real WK-mini with 0 failures, and logs each result.
 1. **Speed readback.** A pot-less WK-mini may have no command to read back the
    current speed. Run a live diagnostic before building; if none exists, use
    the §5.6 fallback. Status: not yet proven.
-2. **Date.** Live system date at launch, not a fixed build date.
+2. **Date.** Decided: the build date, as a constant.
 3. **Layout fidelity.** Window size, row heights and the ~190 pt dropdown width
    get a numeric check in `tools/ui_fidelity_check.py`, per the Standing Bar.
 
