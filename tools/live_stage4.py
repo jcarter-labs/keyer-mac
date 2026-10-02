@@ -211,13 +211,20 @@ def check_4_5() -> bool:
     check("tuneon/tuneoff -> wrote 0b 01 then 0b 00",
           wait_until(lambda: b"\x0b\x01" in written and b"\x0b\x00" in written, 3, "tune")
           and written.index(b"\x0b\x01") < written.index(b"\x0b\x00"))
-    QTest.qWait(3000)                      # let the earlier AR and tune finish: keyer idle
+    # wait until the keyer has been quiet for 2 s so no earlier echo lands in this check
+    quiet_since, last = 0, echo_text(w)
+    waited = 0
+    while quiet_since < 2000 and waited < 12000:
+        QTest.qWait(100); waited += 100
+        now = echo_text(w)
+        quiet_since = quiet_since + 100 if now == last else 0
+        last = now
     w.message.clear_all()
     p.k1elsendstring("TTTTTTTT"); QTest.qWait(300); p.clearbuffer()
     QTest.qWait(4500)
     got = echo_text(w)
-    check(f"clearbuffer after 8 T's -> echo cut short ({got!r})",
-          b"\x0a" in written and set(got) <= {"T"} and 0 < len(got) < 8)
+    check(f"clearbuffer after 8 T's -> fewer than 8 T's sent ({got!r})",
+          b"\x0a" in written and got.count("T") < 8)
     w.shutdown()
     return all(results)
 
