@@ -76,7 +76,7 @@ Rows 4–8 are evenly spaced.
 | 5 | `__build_date__`, `__version__` | Footer | Unit test: footer text equals the two constants |
 
 **WinKeyer checks, in order (first connect and every reconnect):**
-1. **Open** at 1200/8N2, DTR on, after a 0.3 s close/reopen pad. Failure means the "Keyer missing" flow; no commands sent.
+1. **Open** at 1200/8N2, DTR on, after a 0.3 s close/reopen pad that is process-wide (shared by every worker). **Verified live (2026-10-02):** with ~0 s between a close and the next open about 25% of handshakes stalled for several seconds (no recovery by retry or reopen); at 0.3 s or more, 0 of 80. Failure means the "Keyer missing" flow; no commands sent.
 2. **Host Open** (`00 02`). Pass: exactly one version byte (1.0 returned `0x1f`, firmware v3.1). Up to 3 tries, 0.3 s apart, on the already-open port; never reopen the port per try.
 3. **Send every setting, every time**, never relying on what the keyer or an earlier session left behind, in this order:
    1. mode register from `mode_register` (default `11001110`);
@@ -158,6 +158,7 @@ RULE (as given): Keep a short list of known limitations in the masterplan; updat
 7. `__build_date__` is edited by hand at each release.
 8. macOS Apple Silicon only; no `.app` bundle yet.
 9. No stop-sending button in 1.1; `clearbuffer` is reachable only over XMLRPC.
+10. The pad cannot span processes: relaunching the app within a fraction of a second of quitting it can still hit the stall; the worker's backoff recovers it.
 
 # Tasks
 

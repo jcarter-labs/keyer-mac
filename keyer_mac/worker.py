@@ -11,6 +11,7 @@ connection; retries then back off 1, 2, 4, 8, 16, 30, 30 ... s.
 
 from __future__ import annotations
 
+import logging
 import time
 
 import serial
@@ -19,9 +20,19 @@ from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 from keyer_mac import ports as ports_mod
 from keyer_mac import winkeyer
 
+log = logging.getLogger(__name__)
+
+CLOSE_REOPEN_PAD_S = 0.3     # min gap between closing a port and opening one (deviation-log #9)
 POLL_MS = 100
 IDLE_ECHO_S = 10.0
 RECENT_TRAFFIC_S = 2.0      # skip the idle echo test while the keyer is chatty
+
+
+# Last port close in this process, shared by every Worker: (clock function, time).
+# Per-instance memory missed the common case of a new window or worker opening
+# right after the previous one closed (live: ~25% stalled handshakes at ~0 s gap,
+# none at >= 0.3 s). A different clock function (tests) never matches.
+_last_close: tuple = (None, 0.0)
 
 
 class Backoff:
@@ -91,24 +102,43 @@ class Worker(QObject):
             return
         for device in ports_mod.probe_order(self._list_ports(), self._saved, self._manual):
             port = None
+            self._pad_after_close()
             try:
                 port = self._open_port(device)
                 keyer = winkeyer.WinKeyer(port, sleep=self._sleep, clock=self._clock)
                 version = keyer.host_open()
-                if version is not None and keyer.initialize(self.mode_register, self.speed):
+                if version is None:
+                    log.warning("%s opened but the WinKeyer did not answer host open", device)
+                elif keyer.initialize(self.mode_register, self.speed):
                     self._on_connected(device, port, keyer, version)
                     return
-            except (serial.SerialException, OSError):
-                pass            # a bad port just means try the next
+                else:
+                    log.warning("%s answered host open but failed initialization (echo test)", device)
+            except (serial.SerialException, OSError) as exc:
+                log.warning("%s could not be used: %s", device, exc)
             if port is not None:
                 try:
                     port.close()
                 except (serial.SerialException, OSError):
                     pass
+                self._mark_closed()
         self.missing.emit()
         delay = self._backoff.next()
         self.retry_scheduled.emit(delay)
         self._schedule(delay, lambda e=epoch: self._attempt(e))
+
+    def _mark_closed(self) -> None:
+        global _last_close
+        _last_close = (self._clock, self._clock())
+
+    def _pad_after_close(self) -> None:
+        """Opening a port right after closing one makes the WinKeyer miss the
+        handshake (the close/reopen race); keep at least CLOSE_REOPEN_PAD_S."""
+        clock_fn, closed_at = _last_close
+        if clock_fn == self._clock:
+            wait = CLOSE_REOPEN_PAD_S - (self._clock() - closed_at)
+            if wait > 0:
+                self._sleep(wait)
 
     def _on_connected(self, device, port, keyer, version) -> None:
         self._backoff.reset()
@@ -150,6 +180,7 @@ class Worker(QObject):
             except (serial.SerialException, OSError):
                 pass
         self.connected, self.port, self.keyer = False, None, None
+        self._mark_closed()
 
     def _drop(self) -> None:
         self._close_port()

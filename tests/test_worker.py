@@ -235,3 +235,36 @@ def test_50_simulated_unplug_replug_cycles_all_reconnect_with_fresh_settings(h):
     assert failures == 0
     assert h.names().count("found") == 51
     assert h.names().count("disconnected") == 50
+
+
+def test_reopen_waits_out_the_0_3_s_close_reopen_pad(h):
+    h.worker.scan(None, None, 0b11001110, 20)
+    opened_at = []
+    real_open = h.worker._open_port
+    h.worker._open_port = lambda d: (opened_at.append(h.t), real_open(d))[1]
+    h.worker._close_port()
+    closed_at = h.t
+    h.worker._attempt(h.worker._epoch)
+    assert opened_at and opened_at[0] - closed_at >= 0.3 - 1e-6
+
+
+def test_first_open_has_no_pad(h):
+    t0 = h.t
+    h.worker.scan(None, None, 0b11001110, 20)
+    # only the protocol's own 1.0 s reset wait advances the clock, no extra pad
+    assert h.t - t0 < 1.1
+
+
+def test_pad_is_shared_across_worker_instances(h):
+    """A second Worker (new window) opening right after the first closed must
+    still wait out the pad: the stall seen live came from exactly that."""
+    h.worker.scan(None, None, 0b11001110, 20)
+    h.worker._close_port()
+    closed_at = h.t
+    other = Worker(open_port=h.world.open_port, list_ports=h.world.list_ports,
+                   clock=h.clock, sleep=h.sleep, schedule=lambda d, fn: None, auto_poll=False)
+    opened_at = []
+    real_open = other._open_port
+    other._open_port = lambda d: (opened_at.append(h.t), real_open(d))[1]
+    other.scan(None, None, 0b11001110, 20)
+    assert opened_at[0] - closed_at >= 0.3 - 1e-6
