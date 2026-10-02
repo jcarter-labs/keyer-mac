@@ -42,7 +42,9 @@ pot input is ignored.
    `tuneon`, `tuneoff`, `clearbuffer`. Example client:
    `xmlrpc.client.ServerProxy("http://localhost:8000").k1elsendstring("Hello World")`.
    A port-8000 conflict must not abort the app.
-7. Info button: modal showing the app name and version, connected port,
+7. Info button: modal that opens with a summary: **"keyer-mac is an auto keyer
+   written for the Mac to interface with a WinKeyer Mini via USB."** Below it:
+   the app name and version, connected port,
    WinKeyer firmware version, config-file path, XMLRPC address and methods,
    the mbridak attribution and GPL notice, the statement **"Designed to work
    with the K1EL WinKeyer Mini"**, and the repo name
@@ -64,10 +66,18 @@ without error. `KEYER_MAC_CONFIG_PATH` redirects the file for tests.
 
 ## 5. Screen and data sources
 
-Reference: `keyer-win-ui.png` for layout, with the changes below. Window title
-"keyer-mac". **Font: Arial everywhere** (labels, fields, buttons, dropdowns,
+**Screenshots.** Two references, with fixed roles. Target: the finished 1.1
+window approaches `keyer-mac-running.png` plus the changes in this brief.
+Precedence when they disagree: (1) this brief's stated changes; (2)
+`keyer-mac-running.png`, for widget style, gear glyph, button shape, Mac
+window chrome and spacing; (3) `keyer-win-ui.png`, for row order, the gray
+window with white fields, and the element set. `keyer-win-ui.png`'s "send msg
+N" text and "K6GTE PyWinKeyer" title are stale and ignored. Neither image
+shows Info, the footer or the 5-row list, so those follow the table below.
+
+Window title "keyer-mac". **Font: Arial everywhere** (labels, fields, buttons, dropdowns,
 Info dialog). **Background: light gray `#ededed`, entry and display fields
-white `#ffffff`** so they stand out (both measured from the screenshot).
+white `#ffffff`** so they stand out (both measured from `keyer-win-ui.png`).
 
 Top to bottom:
 
