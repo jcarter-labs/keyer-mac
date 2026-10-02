@@ -2,7 +2,8 @@
 """Task 2.2 live check: keyer_mac.winkeyer connect sequence on the real
 WK-mini, N times in a row (default 20), each from a fresh port open.
 
-Per cycle: open port -> host_open (version byte) -> echo test -> host_close
+Per cycle: open port -> host_open (version byte) -> initialize (mode, speed,
+pinned parameters, echo test) -> host_close
 -> close port -> 0.3 s pad. Administrative commands only; never keys the
 radio. The keyer-mac app window must be closed (it holds the port).
 
@@ -33,7 +34,7 @@ def main() -> int:
         try:
             wk = winkeyer.WinKeyer(port)
             version = wk.host_open()
-            echo = wk.echo_test(0x55) if version is not None else False
+            echo = wk.initialize() if version is not None else False
             wk.host_close()
         finally:
             port.close()

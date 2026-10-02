@@ -105,3 +105,24 @@ def test_send_text_uppercases():
     wk, port, _ = make()
     wk.send_text("cq test")
     assert port.written == [b"CQ TEST"]
+
+
+def test_initialize_sends_mode_speed_then_every_pinned_parameter_then_echo():
+    wk, port, _ = make({b"\x00\x04\x55": b"\x55"})
+    assert wk.initialize(0b11001110, 20) is True
+    assert port.written == [
+        b"\x0e\xce", b"\x02\x14",
+        b"\x03\x32", b"\x17\x32", b"\x10\x00", b"\x11\x00",
+        b"\x12\x32", b"\x0d\x00", b"\x04\x00\x00",
+        b"\x00\x04\x55",
+    ]
+
+
+def test_initialize_fails_when_the_echo_test_does_not_answer():
+    wk, _, _ = make()
+    assert wk.initialize() is False
+
+
+def test_sidetone_and_pin_config_are_never_written():
+    from keyer_mac.winkeyer import PINNED_PARAMETERS
+    assert {c for c, _ in PINNED_PARAMETERS}.isdisjoint({0x01, 0x09})

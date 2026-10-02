@@ -17,6 +17,22 @@ ECHO_TEST = 0x04            # admin: 00 04 <byte> -> <byte>
 CMD_SET_SPEED = 0x02
 CMD_SET_MODE = 0x0E
 
+# Parameters the app does not expose, pinned on every connect (Data sources step 3.3).
+# (command, parameter bytes). UNVERIFIED: values are the K1EL documented defaults as
+# remembered; the WK-mini cannot report them back (Task 2.3), so the only check is
+# that the writes are accepted and the echo test still answers. Sidetone (01) and
+# pin configuration (09) are deliberately NOT touched: they are wiring-specific and
+# a wrong pin value could disable keying.
+PINNED_PARAMETERS = (
+    (0x03, (50,)),       # weighting 50
+    (0x17, (50,)),       # dit/dah ratio 50 (3:1)
+    (0x10, (0,)),        # first extension 0
+    (0x11, (0,)),        # key compensation 0
+    (0x12, (50,)),       # paddle switchpoint 50
+    (0x0D, (0,)),        # Farnsworth off
+    (0x04, (0, 0)),      # PTT lead-in 0, tail 0
+)
+
 SPEED_MIN, SPEED_MAX = 6, 34            # UI dropdown: even values only
 DEFAULT_SPEED = 20
 DEFAULT_MODE_REGISTER = 0b11001110
@@ -110,13 +126,14 @@ class WinKeyer:
     def initialize(self, mode_register: int = DEFAULT_MODE_REGISTER, speed: int = DEFAULT_SPEED) -> bool:
         """After a successful host_open: send every setting, then verify.
 
-        Order (Data sources, step 3): mode register, speed. Pinned
-        parameters will be added here once their list is decided (Task 2.3).
-        Speed cannot be read back on the WK-mini (live diagnostic), so the
+        Order (Data sources, step 3): mode register, speed, then the pinned
+        parameters. Speed cannot be read back on the WK-mini (live diagnostic), so the
         check is: writes did not raise, and the echo test still answers.
         """
         self.set_mode(mode_register)
         self.set_speed(speed)
+        for command, params in PINNED_PARAMETERS:
+            self._write(bytes([command, *params]))
         return self.echo_test()
 
     # -- settings --------------------------------------------------------

@@ -81,8 +81,8 @@ Rows 4–8 are evenly spaced.
 3. **Send every setting, every time**, never relying on what the keyer or an earlier session left behind, in this order:
    1. mode register from `mode_register` (default `11001110`);
    2. speed from `speed` (default 20 WPM);
-   3. every other output-affecting parameter the app does not expose (sidetone, weighting, PTT lead/tail, first extension, key compensation, paddle switchpoint, Farnsworth, dit/dah ratio, pin configuration), pinned to the WinKeyer's factory defaults, confirmed by live diagnostic before build (rule 9). **Unverified:** the exact commands and values.
-4. **Verify.** An echo test (admin `04` + a test byte; **unverified** until step 2.3 proves it, rule 9) must return that byte after the settings are sent. Where the protocol allows a readback, compare it with what was sent. **Unverified:** a pot-less WK-mini may allow no speed readback; the live diagnostic decides. If none, the check is "writes succeeded and echo test passed."
+   3. the pinned parameters the app does not expose, in `PINNED_PARAMETERS` in `winkeyer.py`: weighting 50 (`03`), dit/dah ratio 50 (`17`), first extension 0 (`10`), key compensation 0 (`11`), paddle switchpoint 50 (`12`), Farnsworth off (`0D 00`), PTT lead-in 0 and tail 0 (`04`). Sidetone (`01`) and pin configuration (`09`) are never written: wiring-specific, and a wrong pin value could disable keying. **Unverified:** the values are the K1EL defaults as remembered; the WK-mini cannot report them back, so they are checked only by 20/20 live connects where the writes were accepted and the echo test still answered.
+4. **Verify.** An echo test (admin `04` + a test byte; verified live, 20/20) must return that byte after the settings are sent. **Verified (2026-10-02):** the WK-mini cannot report its speed back (admin `07` is silent; the pot query ignores the set speed). The check is therefore "writes succeeded and echo test passed."
 5. **Report.** Only now does the Message box show "Keyer found: WinKeyer vX.Y on <port>, N WPM."
 
 **While connected:** an idle echo test every 10 s (interval proposed; upstream added a keepalive in 2026), so a silent hang is caught without a send.
@@ -152,7 +152,7 @@ RULE (as given): Keep a short list of known limitations in the masterplan; updat
 1. WinKeyer Mini only; no speed pot; UI speed limited to even values 6–34 WPM.
 2. XMLRPC binds `0.0.0.0:8000` with no authentication or rate limit (LAN exposure accepted 2026-09-08).
 3. XMLRPC calls while disconnected are dropped, not queued.
-4. Speed readback and the pinned factory-default parameters are unverified until the live diagnostic runs.
+4. Speed and the pinned parameters cannot be read back from the WK-mini (verified); they are checked by write success plus the echo test only. The pinned values themselves are unverified.
 5. A missing keyer takes up to about 8 s to report.
 6. The USB port-name suffix changes with the physical USB port, so a saved port name is only a first guess.
 7. `__build_date__` is edited by hand at each release.
