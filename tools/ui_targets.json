@@ -1,0 +1,124 @@
+{
+  "measured": {
+    "keyer-mac-running.png": {
+      "button": {
+        "width": 65,
+        "x": 516
+      },
+      "dropdown": {
+        "height": 26,
+        "top": 55,
+        "width": 381,
+        "x": 202
+      },
+      "image": "/Users/N6YU/Projects/keyer-mac/keyer-mac-running.png",
+      "image_size": [
+        617,
+        650
+      ],
+      "margin_left": 15,
+      "margin_right": 15,
+      "message_rows": {
+        "count": 6,
+        "field_height": 21,
+        "first_top": 390,
+        "pitch": 38
+      },
+      "text_boxes": [
+        {
+          "bottom": 196,
+          "fill": "#ffffff",
+          "height": 112,
+          "top": 85,
+          "width": 549,
+          "x": 32
+        },
+        {
+          "bottom": 380,
+          "fill": "#ffffff",
+          "height": 153,
+          "top": 228,
+          "width": 549,
+          "x": 32
+        }
+      ],
+      "window": {
+        "background": "#ffffff",
+        "body_bottom": 607,
+        "body_top": 27,
+        "left": 17,
+        "right": 595,
+        "width": 579
+      }
+    },
+    "keyer-win-ui.png": {
+      "button": {
+        "width": 78,
+        "x": 473
+      },
+      "image": "/Users/N6YU/Projects/keyer-mac/keyer-win-ui.png",
+      "image_size": [
+        564,
+        530
+      ],
+      "margin_left": 13,
+      "margin_right": 13,
+      "message_rows": {
+        "count": 6,
+        "field_height": 26,
+        "first_top": 334,
+        "pitch": 32
+      },
+      "text_boxes": [
+        {
+          "bottom": 184,
+          "fill": "#ffffff",
+          "height": 103,
+          "top": 82,
+          "width": 538,
+          "x": 13
+        },
+        {
+          "bottom": 327,
+          "fill": "#ffffff",
+          "height": 104,
+          "top": 224,
+          "width": 538,
+          "x": 13
+        }
+      ],
+      "window": {
+        "background": "#ededed",
+        "body_bottom": 529,
+        "body_top": 35,
+        "left": 0,
+        "right": 563,
+        "width": 564
+      }
+    }
+  },
+  "targets_1_1": {
+    "box_height_rule": "lines * QFontMetrics.lineSpacing() + 2 * frame; 1.0 baseline (13 pt): message box 112 px, free-text box 153 px",
+    "field_fill": "#ffffff",
+    "font_family": "Arial",
+    "font_pt": {
+      "dropdowns": 14,
+      "entry_and_display": 16,
+      "footer": 11,
+      "labels_and_buttons": 13
+    },
+    "free_text_box_lines": 3,
+    "margin_left": 15,
+    "margin_right": 15,
+    "message_box_lines": 3,
+    "message_row_count": 5,
+    "message_row_gap": 17,
+    "msg_button_right_edge_flush_to_margin": true,
+    "msg_button_width": 65,
+    "port_dropdown_height": 26,
+    "port_dropdown_width": 190,
+    "window_background": "#ededed",
+    "window_width": 579
+  },
+  "tolerance_px": 2
+}

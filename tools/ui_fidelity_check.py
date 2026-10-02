@@ -12,6 +12,7 @@ QWidget.grab() for visual comparison against keyer-win-ui.png. No hardware
 or config-file writes needed beyond an isolated temp path.
 
 Usage: python3 tools/ui_fidelity_check.py [output.png]
+       python3 tools/ui_fidelity_check.py --targets [ui_targets.json]   (Task 1.2)
 """
 
 import json
@@ -48,7 +49,59 @@ def describe_alignment(flags: int) -> str:
     return "|".join(dict.fromkeys(names)) or "(none)"
 
 
+def build_targets() -> dict:
+    """Task 1.2: numeric 1.1 layout targets, measured from the two reference
+    screenshots (tools/ui_measure.py) with the 1.1 brief's changes applied.
+    Deterministic: the same inputs always give the same JSON."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ui_measure
+
+    root = Path(__file__).resolve().parent.parent
+    run = ui_measure.measure(str(root / "keyer-mac-running.png"), (24, 300))
+    win = ui_measure.measure(str(root / "keyer-win-ui.png"), (5, 300), find_dropdown=False)
+    rows = run["message_rows"]
+    return {
+        "tolerance_px": 2,
+        "measured": {"keyer-mac-running.png": run, "keyer-win-ui.png": win},
+        "targets_1_1": {
+            "window_width": run["window"]["width"],
+            "margin_left": run["margin_left"],
+            "margin_right": run["margin_right"],
+            "port_dropdown_width": round(run["dropdown"]["width"] / 2),
+            "port_dropdown_height": run["dropdown"]["height"],
+            "message_box_lines": 3,
+            "free_text_box_lines": 3,
+            "message_row_count": 5,
+            "message_row_gap": rows["pitch"] - rows["field_height"],
+            "msg_button_width": run["button"]["width"],
+            "msg_button_right_edge_flush_to_margin": True,
+            "window_background": win["window"]["background"],
+            "field_fill": win["text_boxes"][0]["fill"],
+            "font_family": "Arial",
+            "font_pt": {"entry_and_display": 16, "dropdowns": 14,
+                        "labels_and_buttons": 13, "footer": 11},
+            "box_height_rule": "lines * QFontMetrics.lineSpacing() + 2 * frame; "
+                               "1.0 baseline (13 pt): message box %d px, free-text box %d px"
+                               % (run["text_boxes"][0]["height"], run["text_boxes"][1]["height"]),
+        },
+    }
+
+
+def write_targets(path: str) -> dict:
+    targets = build_targets()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(targets, f, indent=2, sort_keys=True)
+        f.write("\n")
+    return targets
+
+
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "--targets":
+        out = sys.argv[2] if len(sys.argv) > 2 else str(Path(__file__).resolve().parent / "ui_targets.json")
+        t = write_targets(out)["targets_1_1"]
+        print(json.dumps(t, indent=2, sort_keys=True))
+        print(f"\nWrote {out}")
+        return 0
     out_path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/keyer_mac_ui_fidelity.png"
 
     app = QApplication.instance() or QApplication([])
