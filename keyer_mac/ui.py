@@ -245,6 +245,14 @@ class MainWindow(QWidget):
             button.clicked.connect(lambda _checked=False, n=i: self.send_message(n))
             self.msg_fields.append(field)
             self.msg_buttons.append(button)
+
+        # 4.7 footer, row 9: build date left, version right
+        self.date_label = QLabel(keyer_mac.__build_date__)
+        self.date_label.setFont(arial(PT_FOOTER))
+        grid.addWidget(self.date_label, 9, 0, 1, 3, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.version_label = QLabel(f"v{keyer_mac.__version__}")
+        self.version_label.setFont(arial(PT_FOOTER))
+        grid.addWidget(self.version_label, 9, 3, 1, 3, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.resize(579, 220)
 
         self._thread = QThread()
