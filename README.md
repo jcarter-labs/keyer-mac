@@ -8,7 +8,7 @@ This is a macOS port of Michael Bridak's (K6GTE) **PyWinKeyerSerial**:
 https://github.com/mbridak/PyWinKeyerSerial. Core logic (WinKeyer
 protocol, mode-register bit packing, XMLRPC bridge) is ported directly
 from that project to preserve proven protocol behavior; see
-`masterplan-seed.md` for the full plan and `deviation-log.md` for every
+`masterplan-old.md` for the full plan and `deviation-log.md` for every
 place this port deviates from the source.
 
 ## Running
@@ -38,6 +38,6 @@ GPL-3.0-or-later, inherited from the source project. See `LICENSE`.
 
 ## Status
 
-v1.0 built (Tasks 0–6 in `masterplan-seed.md`). v1.1 is specified in
+v1.0 built (Tasks 0–6 in `masterplan-old.md`). v1.1 is specified in
 `idea.md`: WinKeyer Mini only, 5 canned messages, Info button, Arial font, a
 rebuilt start-up sequence, and a scan countdown. Not built yet.

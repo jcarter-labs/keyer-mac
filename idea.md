@@ -1,6 +1,6 @@
 # keyer-mac v1.1: app brief
 
-Version 1.1 brief, drafted 2026-10-02 from `masterplan-seed.md` (Spec), mbridak's PyWinKeyerSerial
+Version 1.1 brief, drafted 2026-10-02 from `masterplan-old.md` (Spec), mbridak's PyWinKeyerSerial
 README, `keyer-win-ui.png`, `keyer-mac-running.png`, and the changes below.
 Answers the five questions of `masterplan-generator.md`.
 

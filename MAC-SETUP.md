@@ -54,7 +54,7 @@ python3 -c "import PyQt6; import serial; print('PyQt6 + pySerial OK')"
 ```
 
 Pinned versions land in `requirements.txt`/`requirements-lock.txt` once
-Task 3 (core logic port) is underway — see `masterplan-seed.md` Tech §2.
+Task 3 (core logic port) is underway — see `masterplan-old.md` Tech §2.
 
 ## 4. K1EL WinKeyer hardware (when connecting)
 
@@ -67,14 +67,14 @@ ls /dev/cu.*
 ```
 
 Task 2 (external interfaces / live diagnostic) is deferred until the
-device is physically connected — see `masterplan-seed.md` Tasks.
+device is physically connected — see `masterplan-old.md` Tasks.
 
 ## 5. Reference clone (build reference only, not part of this repo)
 
 `pywinkeyerserial/` is a clone of
 [mbridak/PyWinKeyerSerial](https://github.com/mbridak/PyWinKeyerSerial),
 kept alongside this project purely as a build reference (see `README.md`
-and `masterplan-seed.md`). It's excluded in `.gitignore` and is never
+and `masterplan-old.md`). It's excluded in `.gitignore` and is never
 part of keyer-mac's own history:
 
 ```
@@ -83,7 +83,7 @@ git clone https://github.com/mbridak/PyWinKeyerSerial.git pywinkeyerserial
 
 ## 6. From here
 
-`masterplan-seed.md` governs the build (Constitution, Spec, Tech, Tasks).
+`masterplan-old.md` governed the v1.0 build; `masterplan.md` governs v1.1.
 `deviation-log.md` records every place this port deviates from source.
 Config at runtime lives at `~/.keyer-mac.json`, matching the source's
 dotfile approach.

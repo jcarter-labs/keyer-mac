@@ -7,7 +7,7 @@ winkeyer_diagnostic.py.
 Sends an actual test string, which keys the WinKeyer's CW output line.
 Only run this with the WinKeyer NOT wired into a powered, on-air radio.
 
-Binds 0.0.0.0:8000 per masterplan-seed.md Spec §3 (source parity,
+Binds 0.0.0.0:8000 per masterplan-old.md Spec §3 (source parity,
 operator-accepted LAN exposure) — not sandboxed to localhost.
 
 Usage: python3 tools/winkeyer_xmlrpc_diagnostic.py /dev/cu.usbserial-8340
