@@ -24,6 +24,11 @@ DEFAULT_MODE_REGISTER = 0b11001110
 SERIAL_SETTINGS = dict(baudrate=1200, bytesize=8, parity="N", stopbits=2, dsrdtr=True)
 
 
+def format_version(version: int) -> str:
+    """Version byte 0x1f (31) -> "3.1"."""
+    return f"{version // 10}.{version % 10}"
+
+
 def open_port(device: str, timeout: float = 0.05):
     """Open `device` with the WinKeyer's serial settings (1200 8N2, DTR on)."""
     import serial
@@ -101,6 +106,18 @@ class WinKeyer:
         self.port.reset_input_buffer()
         self._write(bytes([0x00, ECHO_TEST, value]))
         return self._read(1) == bytes([value])
+
+    def initialize(self, mode_register: int = DEFAULT_MODE_REGISTER, speed: int = DEFAULT_SPEED) -> bool:
+        """After a successful host_open: send every setting, then verify.
+
+        Order (Data sources, step 3): mode register, speed. Pinned
+        parameters will be added here once their list is decided (Task 2.3).
+        Speed cannot be read back on the WK-mini (live diagnostic), so the
+        check is: writes did not raise, and the echo test still answers.
+        """
+        self.set_mode(mode_register)
+        self.set_speed(speed)
+        return self.echo_test()
 
     # -- settings --------------------------------------------------------
     def set_mode(self, register: int) -> None:
