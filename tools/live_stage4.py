@@ -39,9 +39,9 @@ def wait_until(pred, seconds, label):
     return False
 
 
-def start() -> MainWindow:
+def start(**kw) -> MainWindow:
     print("  [start window]", flush=True)
-    w = MainWindow(cfg=config.load())
+    w = MainWindow(cfg=config.load(), **kw)
     w.show()
     w.start_scan()
     assert wait_until(lambda: w.result == "found", 10, "keyer found"), w.lines
@@ -183,7 +183,46 @@ def check_port() -> bool:
     return ok1 and ok2
 
 
-CHECKS = {"port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
+def check_4_5() -> bool:
+    import xmlrpc.client
+
+    w = start(start_bridge=True, bridge_host="127.0.0.1")     # loopback: no firewall prompt
+    p = xmlrpc.client.ServerProxy(f"http://127.0.0.1:{w.bridge.port}")
+    written = []
+    port = w.worker.keyer.port
+    real_write = port.write
+    port.write = lambda data: (written.append(bytes(data)), real_write(data))[1]
+    results = []
+
+    def check(label, ok):
+        results.append(ok)
+        print(f"  {label}: {'PASS' if ok else 'FAIL'}")
+
+    w.message.clear_all()
+    p.k1elsendstring("E")
+    check("k1elsendstring('E') -> echoed E", wait_until(lambda: echo_text(w) == "E", 5, "echo E"))
+    p.sendblended("AR")
+    check("sendblended('AR') -> wrote 1b 41 52", wait_until(lambda: b"\x1bAR" in written, 3, "blended"))
+    p.setspeed(24)
+    check("setspeed(24) -> wrote 02 18, dropdown shows 24",
+          wait_until(lambda: bytes([2, 24]) in written and w.speed_box.currentData() == 24, 3, "setspeed"))
+    p.setspeed(20)
+    p.tuneon(); QTest.qWait(300); p.tuneoff()
+    check("tuneon/tuneoff -> wrote 0b 01 then 0b 00",
+          wait_until(lambda: b"\x0b\x01" in written and b"\x0b\x00" in written, 3, "tune")
+          and written.index(b"\x0b\x01") < written.index(b"\x0b\x00"))
+    QTest.qWait(3000)                      # let the earlier AR and tune finish: keyer idle
+    w.message.clear_all()
+    p.k1elsendstring("TTTTTTTT"); QTest.qWait(300); p.clearbuffer()
+    QTest.qWait(4500)
+    got = echo_text(w)
+    check(f"clearbuffer after 8 T's -> echo cut short ({got!r})",
+          b"\x0a" in written and set(got) <= {"T"} and 0 < len(got) < 8)
+    w.shutdown()
+    return all(results)
+
+
+CHECKS = {"4.5": check_4_5, "port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
 
 
 def main() -> int:

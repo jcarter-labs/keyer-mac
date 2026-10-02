@@ -17,6 +17,7 @@ from pathlib import Path
 
 from keyer_mac import config, winkeyer
 from keyer_mac import ports as ports_mod
+from keyer_mac.bridge import Bridge
 from keyer_mac.settings import Settings
 from keyer_mac.worker import Worker
 
@@ -108,7 +109,8 @@ class MainWindow(QWidget):
     sig_set_mode = pyqtSignal(int)
 
     def __init__(self, worker: Worker | None = None, cfg: dict | None = None,
-                 list_ports=ports_mod.list_ports):
+                 list_ports=ports_mod.list_ports, start_bridge: bool = False,
+                 bridge_host: str = "0.0.0.0", bridge_port: int = 8000):
         super().__init__()
         self.setWindowTitle("keyer-mac")
         self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:{FONT_FAMILY};}}")
@@ -203,6 +205,17 @@ class MainWindow(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
+        # 4.5 XMLRPC bridge: calls become signals into the worker / this window
+        self.bridge = Bridge(bridge_host, bridge_port, is_connected=lambda: self._connected)
+        self.bridge.send_string.connect(self.worker.send_text)
+        self.bridge.send_blended.connect(self.worker.send_blended)
+        self.bridge.set_speed.connect(self._bridge_set_speed)
+        self.bridge.tune_on.connect(self.worker.tune_on)
+        self.bridge.tune_off.connect(self.worker.tune_off)
+        self.bridge.clear_buffer.connect(self.worker.clear_buffer)
+        self.bridge.note.connect(self._on_note)
+        if start_bridge:
+            self.bridge.start()
         self._watch = QTimer(self)
         self._watch.setInterval(WATCH_MS)
         self._watch.timeout.connect(self._watch_ports)
@@ -310,6 +323,11 @@ class MainWindow(QWidget):
         if text:
             self.sig_send_text.emit(text)
 
+    # -- 4.5 XMLRPC ----------------------------------------------------------------
+    def _bridge_set_speed(self, wpm: int) -> None:
+        self.show_speed(wpm)              # dropdown follows, saved
+        self.sig_set_speed.emit(wpm)      # and the keyer gets it
+
     # -- 4.4 settings dialog -----------------------------------------------------
     def open_settings(self) -> None:
         """Edit the keyer mode register. Save writes it to the keyer and the
@@ -355,6 +373,7 @@ class MainWindow(QWidget):
 
     # -- lifecycle ---------------------------------------------------------------
     def shutdown(self) -> None:
+        self.bridge.stop()
         self._timer.stop()
         self._watch.stop()
         if self._thread.isRunning():
