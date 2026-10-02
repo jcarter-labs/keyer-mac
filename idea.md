@@ -55,7 +55,7 @@ pot input is ignored.
 | Item | Range / default |
 |---|---|
 | Port | dropdown of detected serial ports; editable |
-| Speed | dropdown, 5–35 WPM, default **20** |
+| Speed | dropdown, even values 6–34 WPM, default **20** |
 | Free text | up to 3 visible lines, scrolls |
 | Message 1–5 | text, auto-saved on every edit |
 | Settings dialog | mode register bits as in the seed Spec |

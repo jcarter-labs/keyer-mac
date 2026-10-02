@@ -12,7 +12,7 @@
 
 # Spec
 
-keyer-mac v1.1 is a macOS auto keyer for the K1EL WinKeyer Mini over USB. The operator types free text or presses one of five canned-message buttons, and the keyer sends CW to the rig's key jack. A speed dropdown (5–35 WPM, default 20) and a settings dialog control sending. The Message box shows sent text and connection status. A local XMLRPC server on port 8000 lets logging software fire CW macros. It is a Mac rewrite of mbridak's PyWinKeyerSerial (GPL-3.0), laid out like `keyer-mac-running.png`. Messages, speed and settings persist in `~/.keyer-mac.json`, and every setting is re-sent to the keyer on every connect.
+keyer-mac v1.1 is a macOS auto keyer for the K1EL WinKeyer Mini over USB. The operator types free text or presses one of five canned-message buttons, and the keyer sends CW to the rig's key jack. A speed dropdown (even values 6–34 WPM, default 20) and a settings dialog control sending. The Message box shows sent text and connection status. A local XMLRPC server on port 8000 lets logging software fire CW macros. It is a Mac rewrite of mbridak's PyWinKeyerSerial (GPL-3.0), laid out like `keyer-mac-running.png`. Messages, speed and settings persist in `~/.keyer-mac.json`, and every setting is re-sent to the keyer on every connect.
 
 ## Screen list
 
@@ -27,7 +27,7 @@ Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Ari
 | 5 | Message box | read-only text, 3 lines, white | Row 1, full width, left-justified; sent text and status |
 | 6 | "Free text input" | label | Row 2, far left |
 | 7 | "Speed:" | label | Row 2, right-justified, directly left of the speed dropdown |
-| 8 | Speed dropdown | combo box, 5–35 WPM, default 20 | Row 2, flush right |
+| 8 | Speed dropdown | combo box, even values 6–34 WPM (15 entries), default 20 | Row 2, flush right |
 | 9 | Free-text input | text edit, 3 lines, white | Row 3, full width, left-justified |
 | 10 | Message fields 1–5 | single-line text, white | Rows 4–8, left, all but the button column |
 | 11 | "msg 1" to "msg 5" | buttons, 70 pt wide | Rows 4–8, flush right, one per field |
@@ -59,9 +59,9 @@ Rows 4–8 are evenly spaced.
    - Pass (a cold start is a fresh process launch with the keyer plugged in and the port previously closed, not a keyer power cycle): 50 cold starts, 50 scripted port close/reopen cycles, and 3 manual unplug/replug cycles, 0 failures.
 2. **Free-text sending.** Each typed character is sent as typed, upper-cased. Deleting a character erases it from the keyer's buffer if not yet sent. The Message box shows the characters the keyer echoes as it sends. The box shows 3 lines and scrolls.
 3. **Canned messages.** Typing in any of 5 fields and pressing "msg N" (N = 1–5) sends that text, upper-cased. Each edit saves at once to `~/.keyer-mac.json` (keys `1`–`5`); relaunch restores all five. A leftover key `6` is ignored without error.
-4. **Speed.** Range 5–35 WPM, default 20. Picking a value sends it at once and saves it as `speed`; the dropdown always shows the value last sent. The WK-mini has no pot, so no pot input changes it. XMLRPC `setspeed` updates the dropdown too.
+4. **Speed.** Even values 6, 8 … 34 WPM, default 20. Picking a value sends it at once and saves it as `speed`; the dropdown always shows the value last sent. The WK-mini has no pot, so no pot input changes it. XMLRPC `setspeed` updates the dropdown too.
 5. **Settings (⚙).** The dialog sets Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace and CT spacing. Saving packs the mode register (default `11001110`), writes it to the keyer, and saves it as `mode_register`. Cancel changes nothing.
-6. **XMLRPC bridge.** `http://<host>:8000`, bound to `0.0.0.0`, no authentication. Methods: `k1elsendstring(str)`, `setspeed(int)`, `sendblended(str)`, `tuneon()`, `tuneoff()`, `clearbuffer()`. `setspeed` values outside 5–35 return an XMLRPC fault and change nothing. Pass: a call from another process sends the string and returns within 1 s. If port 8000 is in use, the app still starts and says so in the Message box.
+6. **XMLRPC bridge.** `http://<host>:8000`, bound to `0.0.0.0`, no authentication. Methods: `k1elsendstring(str)`, `setspeed(int)`, `sendblended(str)`, `tuneon()`, `tuneoff()`, `clearbuffer()`. `setspeed` accepts only even values 6–34; anything else returns an XMLRPC fault and changes nothing. Pass: a call from another process sends the string and returns within 1 s. If port 8000 is in use, the app still starts and says so in the Message box.
 7. **Info.** The button opens a dialog that starts with "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB," then: version, connected port, WinKeyer firmware, config-file path, XMLRPC address and methods, the mbridak attribution and GPL notice, "Designed to work with the K1EL WinKeyer Mini," and `jcarter-labs/keyer-mac` with its URL. Closing changes nothing.
 8. **Footer.** The date is the build date (`YYYY-MM-DD`), a constant `__build_date__` beside `__version__`, not read from the clock. "v1.1" is the version.
 
@@ -149,7 +149,7 @@ Under `keyer_mac/`, each testable alone; only `worker.py` and `ui.py` need Qt.
 
 RULE (as given): Keep a short list of known limitations in the masterplan; update it as we go.
 
-1. WinKeyer Mini only; no speed pot; UI speed capped at 35 WPM.
+1. WinKeyer Mini only; no speed pot; UI speed limited to even values 6–34 WPM.
 2. XMLRPC binds `0.0.0.0:8000` with no authentication or rate limit (LAN exposure accepted 2026-09-08).
 3. XMLRPC calls while disconnected are dropped, not queued.
 4. Speed readback and the pinned factory-default parameters are unverified until the live diagnostic runs.
@@ -208,7 +208,7 @@ Each is wired to the real worker, tested, and committed before the next.
 |---|---|---|
 | 4.1 Free text | live: type "TEST" | the keyer echoes T-E-S-T into the Message box; backspace erases an unsent character |
 | 4.2 Five messages | live: fill and press msg 1–5 | each sends its own text; edits persist after relaunch; key `6` ignored |
-| 4.3 Speed | live: choose 5, 20, 35 | each sent at once and saved; relaunch shows the saved value; 20 on a fresh file |
+| 4.3 Speed | live: choose 6, 20, 34 | each sent at once and saved; relaunch shows the saved value; 20 on a fresh file |
 | 4.4 Settings | unit plus live | mode register matches the chosen bits; Cancel changes nothing |
 | 4.5 XMLRPC | real client | six methods work on the live keyer |
 | 4.6 Info | pytest-qt | summary line first; every listed item shows; closing changes nothing |
