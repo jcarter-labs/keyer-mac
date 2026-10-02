@@ -8,6 +8,11 @@ Readable paths for this build: `pywinkeyerserial/` (reference
 implementation, https://github.com/mbridak/PyWinKeyerSerial) and
 `keyer-win-ui.png` (UI reference screenshot).
 
+**Version note:** this plan records the v1.0 build (Tasks 0–6, done). The
+v1.1 changes (WK-mini only, 5 messages, Info button, Arial, new start-up
+sequence) are specified in `idea.md`; where the two differ, `idea.md` governs
+v1.1 and the sections below are history until the v1.1 masterplan replaces them.
+
 ## Constitution
 
 1. **Build only from this document** and named reference artifacts. Name the
@@ -58,7 +63,8 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
    .ui title property "K6GTE winkeyerserial", which had drifted from the
    "K6GTE PyWinKeyer" shown in keyer-win-ui.png anyway) — device dropdown
    (top), sent-text output box, free-text input box, speed spinbox, 6
-   canned-message buttons+fields, settings gear opening a keyer-mode
+   canned-message buttons+fields [v1.1: 5 messages, speed dropdown 5–35,
+   Info button, Arial; see idea.md], settings gear opening a keyer-mode
    dialog (Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace,
    CT spacing).
 3. Data: local serial connection to a K1EL WinKeyer (USB/serial, macOS
@@ -77,7 +83,8 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
 ## Tech
 
 1. Concurrency: single Qt event loop (QApplication.exec) + two QTimers —
-   100ms serial-poll (echo/status/pot-speed bytes) and 250ms XMLRPC-bridge
+   100ms serial-poll (echo/status bytes; pot bytes are discarded since
+   deviation-log #10) and 250ms XMLRPC-bridge
    poll — plus one QThread running the blocking XMLRPC server
    (serve_forever). Same model ports unchanged to macOS; no Mac-specific
    concurrency issue in the source.
@@ -99,8 +106,9 @@ implementation, https://github.com/mbridak/PyWinKeyerSerial) and
 4. Known limitations (inherited from source, kept for parity unless told
    otherwise): global-variable + timer-poll bridge from XMLRPC thread to
    UI thread instead of Qt signals/slots; bare `except` in the serial-poll
-   loop triggers a full reconnect on any read error; POTSET hardcodes a
-   5–55 WPM pot range.
+   loop triggers a full reconnect on any read error [narrowed to
+   SerialException with backoff, deviation-log #8]; POTSET hardcodes a
+   5–55 WPM pot range [pot input is ignored on the WK-mini, #10].
 5. Delivery: py2app (setuptools command) building a macOS .app bundle.
    Config: ~/.keyer-mac.json (Spec §4). Log: stderr only, matching
    source's logging.basicConfig — no log file.

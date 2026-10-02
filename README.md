@@ -20,9 +20,9 @@ python3 -m keyer_mac
 
 Verified 2026-09-08 against a real K1EL WinKeyer at
 `/dev/cu.usbserial-8340`: window opens titled "keyer-mac", device
-dropdown auto-detects the connected WinKeyer, speed spinbox syncs to
-the physical speed-pot position, all 6 canned-message fields/buttons
-and the settings gear are present. Config persists to
+dropdown auto-detects the connected WinKeyer, all 6 canned-message
+fields/buttons and the settings gear are present. (Speed starts at 20 WPM;
+the WK-mini has no speed pot, so pot input is ignored.) Config persists to
 `~/.keyer-mac.json` (set `KEYER_MAC_CONFIG_PATH` to redirect it, e.g.
 for tests).
 
@@ -38,4 +38,6 @@ GPL-3.0-or-later, inherited from the source project. See `LICENSE`.
 
 ## Status
 
-In development — see `masterplan-seed.md` Tasks for current progress.
+v1.0 built (Tasks 0–6 in `masterplan-seed.md`). v1.1 is specified in
+`idea.md`: WinKeyer Mini only, 5 canned messages, Info button, Arial font, a
+rebuilt start-up sequence, and a scan countdown. Not built yet.
