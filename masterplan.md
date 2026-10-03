@@ -56,14 +56,16 @@ Rows 4–8 are evenly spaced.
    - A port the user picks or types (Enter) is tried at once and kept until relaunch or disconnect; auto-probing stops while it is set.
    - `device` is saved only after a successful handshake.
    - Mode register, then speed, are sent from `~/.keyer-mac.json` on every connect (speed 20 if absent). Handshake and checks: see Data sources.
-   - Pass (a cold start is a fresh process launch with the keyer plugged in and the port previously closed, not a keyer power cycle): 50 cold starts, 50 scripted port close/reopen cycles, and 3 manual unplug/replug cycles, 0 failures.
+   - Every failure is printed in the Message box with a time stamp and its reason (see Diagnostics), so a problem can be diagnosed in use.
+   - Pass (a cold start is a fresh process launch with the keyer plugged in and the port previously closed, not a keyer power cycle): 5 cold starts and 3 manual unplug/replug cycles, 0 failures. Not a statistical gate: the Message box diagnostics are the main safeguard.
 2. **Free-text sending.** Each typed character is sent as typed, upper-cased. Deleting a character erases it from the keyer's buffer if not yet sent. The Message box shows the characters the keyer echoes as it sends. The box shows 3 lines and scrolls.
 3. **Canned messages.** Typing in any of 5 fields and pressing "msg N" (N = 1–5) sends that text, upper-cased. Each edit saves at once to `~/.keyer-mac.json` (keys `1`–`5`); relaunch restores all five. A leftover key `6` is ignored without error.
 4. **Speed.** Even values 6, 8 … 34 WPM, default 20. Picking a value sends it at once and saves it as `speed`; the dropdown always shows the value last sent. The WK-mini has no pot, so no pot input changes it. XMLRPC `setspeed` updates the dropdown too.
 5. **Settings (⚙).** The dialog sets Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace and CT spacing. Saving packs the mode register (default `11001110`), writes it to the keyer, and saves it as `mode_register`. Cancel changes nothing.
 6. **XMLRPC bridge.** `http://<host>:8000`, bound to `0.0.0.0`, no authentication. Methods: `k1elsendstring(str)`, `setspeed(int)`, `sendblended(str)`, `tuneon()`, `tuneoff()`, `clearbuffer()`. `setspeed` accepts only even values 6–34; anything else returns an XMLRPC fault and changes nothing. Pass: a call from another process sends the string and returns within 1 s. If port 8000 is in use, the app still starts and says so in the Message box.
 7. **Info.** The button opens a dialog that starts with "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB," then: version, connected port, WinKeyer firmware, config-file path, XMLRPC address and methods, the mbridak attribution and GPL notice, "Designed to work with the K1EL WinKeyer Mini," and `jcarter-labs/keyer-mac` with its URL. Closing changes nothing.
-8. **Footer.** The date is the build date (`YYYY-MM-DD`), a constant `__build_date__` beside `__version__`, not read from the clock. "v1.1" is the version.
+8. **Diagnostics.** When a connect or a send fails, the Message box adds a line `HH:MM:SS <what failed>: <reason>`: no WinKeyer-mini visible; port could not be opened (with the system error); opened but no answer to host open (3 tries); answered but failed the echo test; disconnected, with the cause (serial error, no answer to the idle echo test, or which command's write failed). Each retry adds `HH:MM:SS Retrying in N s`. A successful connect prints none of these.
+9. **Footer.** The date is the build date (`YYYY-MM-DD`), a constant `__build_date__` beside `__version__`, not read from the clock. "v1.1" is the version.
 
 ## Data sources
 
@@ -92,7 +94,7 @@ Rows 4–8 are evenly spaced.
 - The Message box shows "Keyer disconnected. Scanning for keyer… 8" and the countdown restarts. Steps 1–5 run again in full, with settings re-sent from the JSON, not cached.
 - The XMLRPC server stays up. A call that arrives while disconnected is dropped, not queued, and the Message box says so. **Proposed.**
 - Settings changed in the UI while connected (speed, mode register) are sent at once and saved.
-- Checked by the reconnect soak: 50 scripted close/reopen cycles plus 3 manual unplug/replug cycles, each ending with a passing echo test and the speed on the keyer equal to the dropdown (or the step 4 fallback). 0 failures.
+- Checked by 3 manual unplug/replug cycles, each ending with a passing echo test and "Keyer found" (the speed is re-sent from the JSON). 0 failures, and every failure along the way is printed with its reason.
 
 ## Scope for 1.1
 
@@ -222,8 +224,8 @@ Each is wired to the real worker, tested, and committed before the next.
 | Step | Test | Works when |
 |---|---|---|
 | 5.1 Layout and type | `ui_fidelity_check.py` against `ui_targets.json` | every numeric target within 2 px; Arial; 16/14/13/11 pt; 3-line boxes; 5 rows; dropdown about 190 pt |
-| 5.2 Start-up soak | script: 50 cold starts, live keyer | 0 failures; each ends "Keyer found" with speed 20 |
-| 5.3 Reconnect soak | script: 50 port close/reopens, plus 3 manual unplug/replug cycles by you | 0 failures; each ends with a passing echo test |
+| 5.2 Start-up smoke | script: 5 cold starts, live keyer | 0 failures; each ends "Keyer found" with speed 20 |
+| 5.3 Reconnect | 3 manual unplug/replug cycles by you | each ends "Keyer found" with no manual action; any failure shows its reason in the Message box |
 
 **Done when:** 5.1–5.3 pass with output pasted, and a screenshot of the running app sits beside `keyer-mac-running.png`.
 

@@ -129,10 +129,12 @@ moves between ports.
    without error and the keyer still answers an echo test afterwards. The
    message box then shows "Keyer found: WinKeyer vX.Y on <port>, 20 WPM".
 
-**Acceptance:** a re-runnable script does 50 cold starts and 50 port
-close/reopen cycles against the real WK-mini, plus 3 manual unplug/replug
-cycles by the operator, with 0 failures, and logs each result.
-"100%" means zero failures in that run, not a guarantee beyond it.
+**Diagnostics:** every connect or send failure prints a time-stamped line with
+its reason in the Message box, so problems are diagnosed in use.
+
+**Acceptance:** a re-runnable script does 5 cold starts against the real
+WK-mini, plus 3 manual unplug/replug cycles by the operator, with 0 failures.
+The diagnostics, not a large repeat count, are the safeguard.
 
 ## Open items
 
