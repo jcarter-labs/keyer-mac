@@ -6,7 +6,9 @@ Connect: try each candidate (ports.probe_order); the first that answers and
 passes initialize() wins. Every connect re-sends every setting from the
 worker's current values, never cached from an earlier connect.
 Reconnect: a serial error, or an idle echo test with no answer, drops the
-connection; retries then back off 1, 2, 4, 8, 16, 30, 30 ... s.
+connection and an attempt follows at once; after a failed attempt the next
+one is RETRY_S seconds later, every time. A newly plugged-in keyer is tried
+immediately by the window's port watch, not after the wait.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from keyer_mac import winkeyer
 log = logging.getLogger(__name__)
 
 CLOSE_REOPEN_PAD_S = 0.3     # min gap between closing a port and opening one (deviation-log #9)
+RETRY_S = 8                  # fixed wait between automatic attempts (no growing delays)
 POLL_MS = 100
 IDLE_ECHO_S = 10.0
 RECENT_TRAFFIC_S = 2.0      # skip the idle echo test while the keyer is chatty
@@ -33,21 +36,6 @@ RECENT_TRAFFIC_S = 2.0      # skip the idle echo test while the keyer is chatty
 # right after the previous one closed (live: ~25% stalled handshakes at ~0 s gap,
 # none at >= 0.3 s). A different clock function (tests) never matches.
 _last_close: tuple = (None, 0.0)
-
-
-class Backoff:
-    DELAYS = (1, 2, 4, 8, 16, 30)
-
-    def __init__(self):
-        self.failures = 0
-
-    def next(self) -> int:
-        delay = self.DELAYS[min(self.failures, len(self.DELAYS) - 1)]
-        self.failures += 1
-        return delay
-
-    def reset(self) -> None:
-        self.failures = 0
 
 
 class Worker(QObject):
@@ -70,7 +58,6 @@ class Worker(QObject):
         self._schedule = schedule or self._qt_schedule
         self._auto_poll = auto_poll
         self._poll_timer: QTimer | None = None
-        self._backoff = Backoff()
         self._epoch = 0
         self._saved = self._manual = None
         self.mode_register = winkeyer.DEFAULT_MODE_REGISTER
@@ -93,7 +80,6 @@ class Worker(QObject):
         self._saved, self._manual = saved, manual
         self.mode_register, self.speed = mode_register, speed
         self._epoch += 1
-        self._backoff.reset()
         if self.connected:
             self._close_port()
         self._attempt(self._epoch)
@@ -133,9 +119,8 @@ class Worker(QObject):
                     pass
                 self._mark_closed()
         self.missing.emit()
-        delay = self._backoff.next()
-        self.retry_scheduled.emit(delay)
-        self._schedule(delay, lambda e=epoch: self._attempt(e))
+        self.retry_scheduled.emit(RETRY_S)
+        self._schedule(RETRY_S, lambda e=epoch: self._attempt(e))
 
     def _mark_closed(self) -> None:
         global _last_close
@@ -151,7 +136,6 @@ class Worker(QObject):
                 self._sleep(wait)
 
     def _on_connected(self, device, port, keyer, version) -> None:
-        self._backoff.reset()
         self.connected, self.device, self.port, self.keyer = True, device, port, keyer
         self._last_check = self._last_traffic = self._clock()
         self.found.emit(device, version, self.speed)
@@ -196,12 +180,9 @@ class Worker(QObject):
         self._close_port()
         self.diagnostic.emit(f"Keyer disconnected: {reason}")
         self._epoch += 1
-        self._backoff.reset()
         self.disconnected.emit()
         epoch = self._epoch
-        delay = self._backoff.next()
-        self.retry_scheduled.emit(delay)
-        self._schedule(delay, lambda e=epoch: self._attempt(e))
+        self._schedule(0, lambda e=epoch: self._attempt(e))     # try again at once
 
     @pyqtSlot()
     def close(self) -> None:

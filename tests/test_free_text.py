@@ -74,8 +74,8 @@ def test_a_repeated_diagnostic_replaces_the_previous_one(qtbot):
     box = MessageBox()
     qtbot.addWidget(box)
     box.add_diag("17:00:01 no keyer", key="no keyer")
-    box.set_countdown("Retrying in 2 s")
+    box.set_countdown("Scanning for keyer… 2")
     box.add_diag("17:00:03 no keyer", key="no keyer")        # same reason, later
-    assert box.lines == ["17:00:03 no keyer", "Retrying in 2 s"]
+    assert box.lines == ["17:00:03 no keyer", "Scanning for keyer… 2"]
     box.add_diag("17:00:04 port busy", key="port busy")      # a different reason appends
-    assert box.lines == ["17:00:03 no keyer", "17:00:04 port busy", "Retrying in 2 s"]
+    assert box.lines == ["17:00:03 no keyer", "17:00:04 port busy", "Scanning for keyer… 2"]

@@ -92,26 +92,38 @@ def test_failures_and_retries_are_printed_with_a_time_stamp(qtbot):
     qtbot.waitUntil(lambda: w.result == "missing", timeout=3000)
     stamped = [l for l in w.lines if re.match(r"^\d\d:\d\d:\d\d ", l)]
     assert any("No WinKeyer-mini" in l for l in stamped)
-    assert "Retrying in 1 s" in w.lines                      # the live countdown line
+    assert w.message.lines[-1].startswith("Scanning for keyer… ")   # the countdown starts over
     w.shutdown()
 
 
-def test_retry_wait_ticks_down_live_and_missing_is_shown_once(qtbot):
+def test_after_a_failed_try_the_same_8_s_countdown_starts_over_each_time(qtbot):
     w, _ = make_window([])
     qtbot.addWidget(w)
     w._on_missing()
-    w._on_diagnostic("No WinKeyer-mini (USB 1a86:7523) is visible to the Mac")
-    w._on_retry_scheduled(3)
-    for _ in range(3):
+    w._on_retry_scheduled(8)
+    for _ in range(8):
         w._tick()
-    assert [l for l in w.lines if l.startswith("Retrying")] == [
-        "Retrying in 3 s", "Retrying in 2 s", "Retrying in 1 s", "Retrying in 0 s"]
-    # a second failed attempt: the same reason updates one line, missing is not repeated
-    w._on_missing()
+    nums = [l for l in w.lines if l.startswith("Scanning for keyer… ")]
+    assert nums[-9:] == [f"Scanning for keyer… {n}" for n in (8, 7, 6, 5, 4, 3, 2, 1)] + ["Scanning for keyer… connecting"]
+    w._tick()                                                # nothing further until the next try
+    assert w.message.lines[-1] == "Scanning for keyer… connecting"
+    # second failed attempt: always back to 8, never 16 or 30; missing and the reason appear once
     w._on_diagnostic("No WinKeyer-mini (USB 1a86:7523) is visible to the Mac")
-    w._on_retry_scheduled(6)
+    w._on_missing()
+    w._on_retry_scheduled(8)
+    w._on_diagnostic("No WinKeyer-mini (USB 1a86:7523) is visible to the Mac")
     shown = w.message.lines
     assert shown.count(MISSING_TEXT) == 1
     assert sum("No WinKeyer-mini" in l for l in shown) == 1
-    assert shown[-1] == "Retrying in 6 s"                    # the countdown stays the last line
+    assert shown[-1] == "Scanning for keyer… 8"              # the countdown stays the last line
+    assert not any("Retrying" in l for l in w.lines)
+    w.shutdown()
+
+
+def test_a_disconnect_starts_the_8_s_scan_again_with_the_disconnected_wording(qtbot):
+    w, _ = make_window([])
+    qtbot.addWidget(w)
+    w._on_found("/dev/cu.usbserial-TEST", 0x1F, 20)
+    w._on_disconnected()
+    assert w.message.lines[-2:] == ["Keyer disconnected.", "Keyer disconnected. Scanning for keyer… 8"]
     w.shutdown()

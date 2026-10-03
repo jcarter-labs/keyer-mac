@@ -1,4 +1,4 @@
-"""Masterplan 3.4: scan, found, missing, disconnect, reconnect with backoff,
+"""Masterplan 3.4: scan, found, missing, disconnect, reconnect every 8 s,
 settings re-sent in order on every connect, echo/status filtering, and 50
 simulated unplug/replug cycles. Fake serial only; no Qt thread needed
 (the worker's slots are called directly, timers are injected)."""
@@ -9,7 +9,7 @@ import pytest
 import serial
 
 from keyer_mac import winkeyer
-from keyer_mac.worker import Backoff, Worker
+from keyer_mac.worker import RETRY_S, Worker
 
 P = namedtuple("P", "device vid pid")
 WK = P("/dev/cu.usbserial-SIM", 0x1A86, 0x7523)
@@ -114,35 +114,34 @@ def test_scan_finds_the_keyer_and_sends_every_setting_in_order(h):
         b"\x00\x03", b"\x00\x02", b"\x0e\xce", b"\x02\x14", *PINNED, b"\x00\x04\x55"]
 
 
-def test_missing_then_backoff_1_2_4_8_16_30_30(h):
+def test_missing_retries_every_8_s_forever_with_no_growing_delay(h):
     h.world.unplug()
     h.worker.scan(None, None, 0b11001110, 20)
     delays = [h.events[-1][1][0]]
-    for _ in range(6):
+    for _ in range(9):
         h.fire_next_retry()
         delays.append(h.events[-1][1][0])
-    assert delays == [1, 2, 4, 8, 16, 30, 30]
-    assert h.names().count("missing") == 7
+    assert delays == [8] * 10 and RETRY_S == 8
+    assert h.names().count("missing") == 10
     assert "found" not in h.names()
 
 
-def test_retry_finds_the_keyer_once_plugged_and_resets_backoff(h):
+def test_retry_finds_the_keyer_once_plugged(h):
     h.world.unplug()
     h.worker.scan(None, None, 0b11001110, 20)
-    h.fire_next_retry(); h.fire_next_retry()       # two more misses: next delay is 4
+    h.fire_next_retry(); h.fire_next_retry()       # two more misses
     h.world.plug()
     h.fire_next_retry()
     assert h.names()[-1] == "found"
     assert h.worker.connected
-    assert h.worker._backoff.failures == 0
 
 
-def test_serial_error_drops_and_schedules_a_reconnect_in_1_s(h):
+def test_serial_error_drops_and_tries_again_at_once(h):
     h.worker.scan(None, None, 0b11001110, 20)
     h.world.unplug()
     h.worker.poll()
-    assert h.names()[-2:] == ["disconnected", "retry_scheduled"]
-    assert h.events[-1][1] == (1,)
+    assert h.names()[-1] == "disconnected"
+    assert h.scheduled[0][0] == 0            # an immediate attempt, not a wait
     assert not h.worker.connected
     assert h.world.ports[0].closed
 
@@ -194,13 +193,6 @@ def test_a_write_error_while_sending_drops_the_connection(h):
     h.world.unplug()
     h.worker.send_text("CQ")
     assert "disconnected" in h.names()
-
-
-def test_backoff_sequence_and_reset():
-    b = Backoff()
-    assert [b.next() for _ in range(8)] == [1, 2, 4, 8, 16, 30, 30, 30]
-    b.reset()
-    assert b.next() == 1
 
 
 def test_manual_scan_restart_cancels_the_pending_retry(h):

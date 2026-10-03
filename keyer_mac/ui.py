@@ -213,7 +213,6 @@ class MainWindow(QWidget):
         self.remaining = SCAN_SECONDS
         self._prefix = SCAN_PREFIX
         self._scanning = False
-        self._retry_left = 0
         self._missing_shown = False
         self._old_text = ""
 
@@ -366,7 +365,7 @@ class MainWindow(QWidget):
 
     def _watch_ports(self) -> None:
         """While no keyer is connected, notice a newly enumerated WK-mini and
-        try it now instead of waiting out the retry backoff."""
+        try it now instead of waiting out the 8 s between automatic attempts."""
         if self._connected:
             return
         ports = self._list_ports()
@@ -381,14 +380,14 @@ class MainWindow(QWidget):
     def _record(self, text: str) -> None:
         self.lines.append(text)
 
-    def _start_countdown(self, prefix: str) -> None:
-        self._prefix, self.remaining, self._scanning, self.result = prefix, SCAN_SECONDS, True, None
-        self._missing_shown = False
+    def _start_countdown(self, prefix: str, seconds: int = SCAN_SECONDS) -> None:
+        self._prefix, self.remaining, self._scanning = prefix, seconds, True
         self._show_countdown()
         self._timer.start()
 
     def _show_countdown(self) -> None:
-        text = f"{self._prefix}{self.remaining}"
+        # at 0 the attempt is running; say so instead of sitting on "0"
+        text = f"{self._prefix}{self.remaining if self.remaining > 0 else 'connecting'}"
         self.message.set_countdown(text)
         self._record(text)
 
@@ -397,6 +396,7 @@ class MainWindow(QWidget):
         self._seen_candidates = {p.device for p in self._list_ports() if ports_mod.is_winkeyer_candidate(p)}
         self._watch.start()
         self.message.clear_all()
+        self.result, self._missing_shown = None, False
         self._start_countdown(SCAN_PREFIX)
         if not self._thread.isRunning():
             self._thread.start()
@@ -408,11 +408,7 @@ class MainWindow(QWidget):
         if self._scanning and self.remaining > 0:
             self.remaining -= 1
             self._show_countdown()
-        elif not self._scanning and self._retry_left > 0:
-            self._retry_left -= 1
-            self._show_retry()
-        elif not self._scanning:
-            self._timer.stop()
+
 
     def _on_found(self, device: str, version: int, speed: int) -> None:
         self._scanning = False
@@ -432,9 +428,7 @@ class MainWindow(QWidget):
         config.save(self.cfg)
 
     def _on_missing(self) -> None:
-        self._scanning = False
         self.result = "missing"
-        self.message.clear_countdown()
         if not self._missing_shown:
             self._missing_shown = True
             self.message.add_line(MISSING_TEXT)
@@ -444,6 +438,7 @@ class MainWindow(QWidget):
         self._connected = False
         self._firmware = None
         self.message.add_line("Keyer disconnected.")
+        self.result, self._missing_shown = None, False
         self._start_countdown(DISCONNECTED_PREFIX)
 
     def _on_diagnostic(self, text: str) -> None:
@@ -453,16 +448,9 @@ class MainWindow(QWidget):
         self._record(line)
 
     def _on_retry_scheduled(self, delay_s: float) -> None:
-        """Show the wait until the next automatic attempt, ticking down live."""
-        self._scanning = False
-        self._retry_left = int(delay_s)
-        self._show_retry()
-        self._timer.start()
-
-    def _show_retry(self) -> None:
-        text = f"Retrying in {self._retry_left} s"
-        self.message.set_countdown(text)
-        self._record(text)
+        """An attempt failed: the same 8 s scan countdown starts over, so the
+        number always means "seconds until the next try"."""
+        self._start_countdown(SCAN_PREFIX, int(delay_s))
 
     def _on_note(self, text: str) -> None:
         self.message.add_line(text)
