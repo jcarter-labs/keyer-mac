@@ -3,12 +3,12 @@
 1. Build from masterplan.md, idea.md and my screenshots; borrow language, tools, specs, or open-source code from examples as I choose.
 2. At the start of the build, check tools, libraries, GitHub login, that this folder is its own repo root, and that each data source's host and port can be reached, on my platforms; show pass/fail.
 3. After each change, measure the app against the Spec's screen list; show pass/fail.
-4. After each working step: run all tests, show me proof, commit, and push to GitHub. Keep going within a stage; stop only at stage end, on a failed test, after two failed fixes, or for my decision.
+4. After each working step: run all tests, show me proof, commit, and push to GitHub. Keep going within a stage; stop only at stage end, on a failed test, after two failed fixes, or for my decision. After two failures of the same kind, stop and diagnose from the log before changing anything.
 5. When code and masterplan disagree, propose only major changes, one line each; update the masterplan after I approve.
 6. One concern per commit.
 7. Mark unverified behavior unverified, in code and in commit messages.
 8. Tests touch only the project and runner temp dirs; redirect `$HOME` and env-derived paths suite-wide, and assert it.
-9. Prove any hardware command with a live diagnostic before writing code around it; the diagnostic uses the app's real identity, never a stand-in.
+9. Prove any hardware command with a live diagnostic before writing code around it; the diagnostic uses the app's real identity, never a stand-in. Before building any display, describe the on-screen behaviour expected, with the exact text and numbers, and get it confirmed.
 
 # Spec
 
@@ -16,7 +16,7 @@ keyer-mac v1.1 is a macOS auto keyer for the K1EL WinKeyer Mini over USB. The op
 
 ## Screen list
 
-Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Arial throughout. Background gray `#ededed`; the two text boxes and five message fields white `#ffffff`. Precedence when the two screenshots differ: this plan's stated changes, then `keyer-mac-running.png` (widget style, spacing, window chrome), then `keyer-win-ui.png` (row order, element set, gray window with white fields; its "send msg N" text and "K6GTE PyWinKeyer" title are stale and ignored). Heights come from the layout; every numeric target, including width, is the measured value in `tools/ui_targets.json`, and the 579 pt here is only the starting value.
+Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Arial throughout. Background gray `#ededed`; the two text boxes and five message fields white `#ffffff`. Precedence when the two screenshots differ: this plan's stated changes, then `keyer-mac-running.png` (widget style, spacing, window chrome), then `keyer-win-ui.png` (row order, element set, gray window with white fields; its "send msg N" text and "K6GTE PyWinKeyer" title are stale and ignored). The connected state is shown in `keyer-mac-1.1.png` (rendered from the real window). Heights come from the layout; every numeric target, including width, is the measured value in `tools/ui_targets.json`, and the 579 pt here is only the starting value.
 
 | # | Element | Type | Where it sits |
 |---|---|---|---|
@@ -87,7 +87,7 @@ Rows 4–8 are evenly spaced.
 4. **Verify.** An echo test (admin `04` + a test byte; verified live, 20/20) must return that byte after the settings are sent. **Verified (2026-10-02):** the WK-mini cannot report its speed back (admin `07` is silent; the pot query ignores the set speed). The check is therefore "writes succeeded and echo test passed."
 5. **Report.** Only now does the Message box show "Keyer found: WinKeyer vX.Y on <port>, N WPM."
 
-**While connected:** an idle echo test every 10 s (interval proposed; upstream added a keepalive in 2026), so a silent hang is caught without a send.
+**While connected:** an idle echo test every 10 s (interval proposed; upstream added a keepalive in 2026), so a silent hang is caught without a send. **Unverified:** it has not yet run over a long real session.
 
 **After a reconnect:**
 - Triggers: a serial read or write error, the port missing from enumeration, or an echo test with no answer.
@@ -161,6 +161,7 @@ RULE (as given): Keep a short list of known limitations in the masterplan; updat
 8. macOS Apple Silicon only; no `.app` bundle yet.
 9. No stop-sending button in 1.1; `clearbuffer` is reachable only over XMLRPC.
 10. The pad cannot span processes: relaunching the app within a fraction of a second of quitting it can still hit the stall; the next attempt, 8 s later, recovers it.
+11. The 10 s idle echo test interval is a proposal, not yet seen over a long session; the pinned parameter values are unverified (item 4).
 
 # Tasks
 
@@ -216,6 +217,7 @@ Each is wired to the real worker, tested, and committed before the next.
 | 4.5 XMLRPC | real client | six methods work on the live keyer |
 | 4.6 Info | pytest-qt | summary line first; every listed item shows; closing changes nothing |
 | 4.7 Footer | pytest-qt | text equals `__build_date__` and `__version__` |
+| 4.8 Port dropdown (added during the build) | live plus fake port lists | lists every port; picking or typing one tries it at once; the connected port is a no-op; a newly plugged-in keyer is tried within 2 s |
 
 **Done when:** every row passes in the same live session.
 
