@@ -8,12 +8,13 @@ screen list: 0 header, 1 Message box, 2 free-text label, 3 free-text box,
 
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
+
 from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QGridLayout, QLabel, QLineEdit,
                              QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
-
-from pathlib import Path
 
 import keyer_mac
 from keyer_mac import config, winkeyer
@@ -267,6 +268,8 @@ class MainWindow(QWidget):
         self.worker.disconnected.connect(self._on_disconnected)
         self.worker.echoed.connect(self.message.add_echo)
         self.worker.note.connect(self._on_note)
+        self.worker.diagnostic.connect(self._on_diagnostic)
+        self.worker.retry_scheduled.connect(self._on_retry_scheduled)
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
@@ -375,6 +378,15 @@ class MainWindow(QWidget):
         self._firmware = None
         self.message.add_line("Keyer disconnected.")
         self._start_countdown(DISCONNECTED_PREFIX)
+
+    def _on_diagnostic(self, text: str) -> None:
+        """A failure and its reason, time-stamped, so it can be diagnosed by use."""
+        line = f"{datetime.now():%H:%M:%S} {text}"
+        self.message.add_line(line)
+        self._record(line)
+
+    def _on_retry_scheduled(self, delay_s: float) -> None:
+        self._on_diagnostic(f"Retrying in {int(delay_s)} s")
 
     def _on_note(self, text: str) -> None:
         self.message.add_line(text)

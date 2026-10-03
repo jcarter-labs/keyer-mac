@@ -58,7 +58,7 @@ def test_missing_when_no_candidate(qtbot):
         w.start_scan()
     qtbot.waitUntil(lambda: w.result == "missing", timeout=2000)
     assert w.lines[0] == "Scanning for keyer… 8"
-    assert w.lines[-1] == MISSING_TEXT
+    assert MISSING_TEXT in w.lines
     w.shutdown()
 
 
@@ -81,4 +81,16 @@ def test_countdown_keeps_ticking_while_the_port_stalls(qtbot):
     qtbot.waitUntil(lambda: w.result is not None, timeout=8000)
     ticks = [l for l in w.lines if l.startswith("Scanning")]
     assert ticks[:3] == ["Scanning for keyer… 8", "Scanning for keyer… 7", "Scanning for keyer… 6"]
+    w.shutdown()
+
+
+def test_failures_and_retries_are_printed_with_a_time_stamp(qtbot):
+    import re
+    w, _ = make_window([])
+    qtbot.addWidget(w)
+    w.start_scan()
+    qtbot.waitUntil(lambda: w.result == "missing", timeout=3000)
+    stamped = [l for l in w.lines if re.match(r"^\d\d:\d\d:\d\d ", l)]
+    assert any("No WinKeyer-mini" in l for l in stamped)
+    assert any(l.endswith("Retrying in 1 s") for l in stamped)
     w.shutdown()

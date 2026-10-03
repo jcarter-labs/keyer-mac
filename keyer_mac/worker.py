@@ -56,6 +56,7 @@ class Worker(QObject):
     disconnected = pyqtSignal()
     echoed = pyqtSignal(str)
     note = pyqtSignal(str)                   # text for the Message box
+    diagnostic = pyqtSignal(str)             # why something failed (UI adds a time stamp)
     retry_scheduled = pyqtSignal(float)      # seconds until the next automatic attempt
     scan_requested = pyqtSignal(object, object, int, int)   # saved, manual, mode, speed
 
@@ -100,7 +101,10 @@ class Worker(QObject):
     def _attempt(self, epoch: int) -> None:
         if epoch != self._epoch or self.connected:
             return
-        for device in ports_mod.probe_order(self._list_ports(), self._saved, self._manual):
+        order = ports_mod.probe_order(self._list_ports(), self._saved, self._manual)
+        if not order:
+            self.diagnostic.emit("No WinKeyer-mini (USB 1a86:7523) is visible to the Mac")
+        for device in order:
             port = None
             self._pad_after_close()
             try:
@@ -108,14 +112,20 @@ class Worker(QObject):
                 keyer = winkeyer.WinKeyer(port, sleep=self._sleep, clock=self._clock)
                 version = keyer.host_open()
                 if version is None:
-                    log.warning("%s opened but the WinKeyer did not answer host open", device)
+                    msg = f"{device} opened but the WinKeyer did not answer host open ({keyer.MAX_TRIES} tries)"
+                    log.warning(msg)
+                    self.diagnostic.emit(msg)
                 elif keyer.initialize(self.mode_register, self.speed):
                     self._on_connected(device, port, keyer, version)
                     return
                 else:
-                    log.warning("%s answered host open but failed initialization (echo test)", device)
+                    msg = f"{device} answered host open but failed the echo test after the settings"
+                    log.warning(msg)
+                    self.diagnostic.emit(msg)
             except (serial.SerialException, OSError) as exc:
-                log.warning("%s could not be used: %s", device, exc)
+                msg = f"{device} could not be used: {exc}"
+                log.warning(msg)
+                self.diagnostic.emit(msg)
             if port is not None:
                 try:
                     port.close()
@@ -166,9 +176,9 @@ class Worker(QObject):
                   and now - self._last_traffic >= RECENT_TRAFFIC_S):
                 self._last_check = now
                 if not self.keyer.echo_test():
-                    self._drop()
-        except (serial.SerialException, OSError):
-            self._drop()
+                    self._drop("no answer to the idle echo test")
+        except (serial.SerialException, OSError) as exc:
+            self._drop(f"serial error while reading: {exc}")
 
     def _close_port(self) -> None:
         if self._poll_timer:
@@ -182,8 +192,9 @@ class Worker(QObject):
         self.connected, self.port, self.keyer = False, None, None
         self._mark_closed()
 
-    def _drop(self) -> None:
+    def _drop(self, reason: str = "unknown") -> None:
         self._close_port()
+        self.diagnostic.emit(f"Keyer disconnected: {reason}")
         self._epoch += 1
         self._backoff.reset()
         self.disconnected.emit()
@@ -204,8 +215,8 @@ class Worker(QObject):
             return
         try:
             action(self.keyer)
-        except (serial.SerialException, OSError):
-            self._drop()
+        except (serial.SerialException, OSError) as exc:
+            self._drop(f"write failed while sending ({what}): {exc}")
 
     @pyqtSlot(str)
     def send_text(self, text: str) -> None:

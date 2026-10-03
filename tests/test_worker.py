@@ -82,7 +82,7 @@ class Harness:
         self.worker = Worker(open_port=self.world.open_port, list_ports=self.world.list_ports,
                              clock=self.clock, sleep=self.sleep,
                              schedule=lambda d, fn: self.scheduled.append((d, fn)), auto_poll=False)
-        for name in ("found", "missing", "disconnected", "echoed", "note", "retry_scheduled"):
+        for name in ("found", "missing", "disconnected", "echoed", "note", "retry_scheduled", "diagnostic"):
             getattr(self.worker, name).connect(lambda *a, n=name: self.events.append((n, a)))
 
     def clock(self):
@@ -268,3 +268,67 @@ def test_pad_is_shared_across_worker_instances(h):
     other._open_port = lambda d: (opened_at.append(h.t), real_open(d))[1]
     other.scan(None, None, 0b11001110, 20)
     assert opened_at[0] - closed_at >= 0.3 - 1e-6
+
+
+# ---- diagnostics: every failure says why (printed in the Message box) -------------
+
+def diag(h):
+    return [e[1][0] for e in h.events if e[0] == "diagnostic"]
+
+
+def test_no_keyer_visible_is_explained(h):
+    h.world.unplug()
+    h.worker.scan(None, None, 0b11001110, 20)
+    assert diag(h) == ["No WinKeyer-mini (USB 1a86:7523) is visible to the Mac"]
+
+
+def test_a_port_that_will_not_open_is_explained_with_the_error(h):
+    h.world.open_port_orig = h.world.open_port
+    def refuse(device):
+        raise serial.SerialException("resource busy")
+    h.worker._open_port = refuse
+    h.worker.scan(None, None, 0b11001110, 20)
+    assert diag(h) == [f"{WK.device} could not be used: resource busy"]
+
+
+def test_a_keyer_that_does_not_answer_is_explained(h):
+    h.world.hung = True
+    h.worker.scan(None, None, 0b11001110, 20)
+    assert diag(h) == [f"{WK.device} opened but the WinKeyer did not answer host open (3 tries)"]
+
+
+def test_a_failed_echo_test_after_settings_is_explained(h):
+    real = winkeyer.WinKeyer.echo_test
+    winkeyer.WinKeyer.echo_test = lambda self, value=0x55: False
+    try:
+        h.worker.scan(None, None, 0b11001110, 20)
+    finally:
+        winkeyer.WinKeyer.echo_test = real
+    assert diag(h) == [f"{WK.device} answered host open but failed the echo test after the settings"]
+
+
+def test_a_dropped_connection_says_why(h):
+    h.worker.scan(None, None, 0b11001110, 20)
+    h.world.unplug()
+    h.worker.poll()
+    assert any(d.startswith("Keyer disconnected: serial error while reading") for d in diag(h))
+
+
+def test_an_idle_echo_failure_says_why(h):
+    h.worker.scan(None, None, 0b11001110, 20)
+    h.world.hung = True
+    h.t += 20
+    h.worker.poll()
+    assert "Keyer disconnected: no answer to the idle echo test" in diag(h)
+
+
+def test_a_write_error_names_the_command(h):
+    h.worker.scan(None, None, 0b11001110, 20)
+    h.world.unplug()
+    h.worker.send_text("CQ")
+    assert any("write failed while sending (send)" in d for d in diag(h))
+
+
+def test_a_good_connect_prints_no_diagnostics(h):
+    h.worker.scan(None, None, 0b11001110, 20)
+    assert diag(h) == []
