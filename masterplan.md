@@ -8,7 +8,7 @@
 6. One concern per commit.
 7. Mark unverified behavior unverified, in code and in commit messages.
 8. Tests touch only the project and runner temp dirs; redirect `$HOME` and env-derived paths suite-wide, and assert it.
-9. Prove any hardware command with a live diagnostic before writing code around it; the diagnostic uses the app's real identity, never a stand-in. Before building any display, describe the on-screen behaviour expected, with the exact text and numbers, and get it confirmed.
+9. Prove any hardware command with a live diagnostic before writing code around it; the diagnostic uses the app's real identity, never a stand-in. A setting is verified by its observable effect, not only by the bytes written (e.g. CW speed by the timing of the keyer's echoes). Before building any display, describe the on-screen behaviour expected, with the exact text and numbers, and get it confirmed.
 
 # Spec
 
@@ -61,7 +61,7 @@ Rows 4–8 are evenly spaced. Info, ⚙, the port dropdown and the speed dropdow
    - Pass (a cold start is a fresh process launch with the keyer plugged in and the port previously closed, not a keyer power cycle): 5 cold starts and 3 manual unplug/replug cycles, 0 failures. Not a statistical gate: the Message box diagnostics are the main safeguard.
 2. **Free-text sending.** Each typed character is sent as typed, upper-cased. Deleting a character erases it from the keyer's buffer if not yet sent. The Message box shows the characters the keyer echoes as it sends. The box shows 3 lines and scrolls.
 3. **Canned messages.** Typing in any of 5 fields and pressing "msg N" (N = 1–5) sends that text, upper-cased. Each edit saves at once to `~/.keyer-mac.json` (keys `1`–`5`); relaunch restores all five. A leftover key `6` is ignored without error.
-4. **Speed.** Even values 6, 8 … 34 WPM, default 20. Picking a value sends it at once and saves it as `speed`; the dropdown always shows the value last sent. The WK-mini has no pot, so no pot input changes it. XMLRPC `setspeed` updates the dropdown too.
+4. **Speed.** Even values 6, 8 … 34 WPM, default 20. Picking a value sends it at once and saves it as `speed`; the dropdown always shows the value last sent. The WK-mini has no pot, so no pot input changes it. XMLRPC `setspeed` updates the dropdown too. The CW speed really changes: the gap between echoed characters (4 units of 1200/WPM ms for "E") is within 25% of expected at 20, 34, 6 and 20 WPM, set in that order.
 5. **Settings (⚙).** The dialog sets Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace and CT spacing. Saving packs the mode register (default `11001110`), writes it to the keyer, and saves it as `mode_register`. Cancel changes nothing.
 6. **XMLRPC bridge.** `http://<host>:8000`, bound to `0.0.0.0`, no authentication. Methods: `k1elsendstring(str)`, `setspeed(int)`, `sendblended(str)`, `tuneon()`, `tuneoff()`, `clearbuffer()`. `setspeed` accepts only even values 6–34; anything else returns an XMLRPC fault and changes nothing. Pass: a call from another process sends the string and returns within 1 s. If port 8000 is in use, the app still starts and says so in the Message box.
 7. **Info.** The button opens a dialog that starts with "Keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB," then: version, connected port, WinKeyer firmware, config-file path, XMLRPC address and methods, the mbridak attribution and GPL notice, "Designed to work with the K1EL WinKeyer Mini," and `jcarter-labs/keyer-mac` with its URL. Closing changes nothing.
@@ -83,9 +83,10 @@ Rows 4–8 are evenly spaced. Info, ⚙, the port dropdown and the speed dropdow
 2. **Host Open** (`00 02`). Pass: exactly one version byte (1.0 returned `0x1f`, firmware v3.1). Up to 3 tries, 0.3 s apart, on the already-open port; never reopen the port per try.
 3. **Send every setting, every time**, never relying on what the keyer or an earlier session left behind, in this order:
    1. mode register from `mode_register` (default `11001110`);
-   2. speed from `speed` (default 20 WPM);
-   3. the pinned parameters the app does not expose, in `PINNED_PARAMETERS` in `winkeyer.py`: weighting 50 (`03`), dit/dah ratio 50 (`17`), first extension 0 (`10`), key compensation 0 (`11`), paddle switchpoint 50 (`12`), Farnsworth off (`0D 00`), PTT lead-in 0 and tail 0 (`04`). Sidetone (`01`) and pin configuration (`09`) are never written: wiring-specific, and a wrong pin value could disable keying. **Unverified:** the values are the K1EL defaults as remembered; the WK-mini cannot report them back, so they are checked only by 20/20 live connects where the writes were accepted and the echo test still answered.
-4. **Verify.** An echo test (admin `04` + a test byte; verified live, 20/20) must return that byte after the settings are sent. **Verified (2026-10-02):** the WK-mini cannot report its speed back (admin `07` is silent; the pot query ignores the set speed). The check is therefore "writes succeeded and echo test passed."
+   2. speed-pot setup `05 05 32 00` (minimum 5 WPM, range 50): the WK-mini has no pot, but without this command the keyer ignored speed commands above about 15 WPM (**verified live, 2026-10-02**: set 20 and 34 both measured 15 WPM; with it, every setting followed);
+   3. speed from `speed` (default 20 WPM);
+   4. the pinned parameters the app does not expose, in `PINNED_PARAMETERS` in `winkeyer.py`: weighting 50 (`03`), dit/dah ratio 50 (`17`), first extension 0 (`10`), key compensation 0 (`11`), paddle switchpoint 50 (`12`), Farnsworth off (`0D 00`), PTT lead-in 0 and tail 0 (`04`). Sidetone (`01`) and pin configuration (`09`) are never written: wiring-specific, and a wrong pin value could disable keying. **Unverified:** the values are the K1EL defaults as remembered; the WK-mini cannot report them back, so they are checked only by 20/20 live connects where the writes were accepted and the echo test still answered.
+4. **Verify.** An echo test (admin `04` + a test byte; verified live, 20/20) must return that byte after the settings are sent. **Verified (2026-10-02):** the WK-mini cannot report its speed back (admin `07` is silent; the pot query ignores the set speed). Writes succeeding and the echo test passing proves only that the keyer is alive; the speed itself is verified by the **echo timing** of sent characters (`tools/live_speed_diagnostic.py`), which is how the missing speed-pot setup was found.
 5. **Report.** Only now does the Message box show "Keyer found: WinKeyer vX.Y on <port>, N WPM."
 
 **While connected:** an idle echo test every 10 s (interval proposed; upstream added a keepalive in 2026), so a silent hang is caught without a send. **Unverified:** it has not yet run over a long real session.
@@ -155,7 +156,7 @@ RULE (as given): Keep a short list of known limitations in the masterplan; updat
 1. WinKeyer Mini only; no speed pot; UI speed limited to even values 6–34 WPM.
 2. XMLRPC binds `0.0.0.0:8000` with no authentication or rate limit (LAN exposure accepted 2026-09-08).
 3. XMLRPC calls while disconnected are dropped, not queued.
-4. Speed and the pinned parameters cannot be read back from the WK-mini (verified); they are checked by write success plus the echo test only. The pinned values themselves are unverified.
+4. The WK-mini cannot report its speed or the pinned parameters back (verified). Speed is verified by echo timing; the pinned parameters only by write success plus the echo test, and their values are unverified.
 5. A missing keyer takes up to about 8 s to report.
 6. The USB port-name suffix changes with the physical USB port, so a saved port name is only a first guess.
 7. `__build_date__` is edited by hand at each release.
@@ -213,7 +214,7 @@ Each is wired to the real worker, tested, and committed before the next.
 |---|---|---|
 | 4.1 Free text | live: type "TEST" | the keyer echoes T-E-S-T into the Message box; backspace erases an unsent character |
 | 4.2 Five messages | live: fill and press msg 1–5 | each sends its own text; edits persist after relaunch; key `6` ignored |
-| 4.3 Speed | live: choose 6, 20, 34 | each sent at once and saved; relaunch shows the saved value; 20 on a fresh file |
+| 4.3 Speed | live: choose 6, 20, 34; then measure the real CW speed from echo timing at 20, 34, 6, 20 through the window | each sent at once and saved; relaunch shows the saved value; 20 on a fresh file; measured gap within 25% of expected every time |
 | 4.4 Settings | unit plus live | mode register matches the chosen bits; Cancel changes nothing |
 | 4.5 XMLRPC | real client | six methods work on the live keyer |
 | 4.6 Info | pytest-qt | summary line first; every listed item shows; closing changes nothing |
@@ -227,7 +228,7 @@ Each is wired to the real worker, tested, and committed before the next.
 | Step | Test | Works when |
 |---|---|---|
 | 5.1 Layout and type | `ui_fidelity_check.py` against `ui_targets.json` | every numeric target within 2 px; Arial; 16/14/13/11 pt; 3-line boxes; 5 rows; dropdown about 190 pt |
-| 5.2 Start-up smoke | script: 5 cold starts, live keyer | 0 failures; each ends "Keyer found" with speed 20 |
+| 5.2 Start-up smoke | script: 5 cold starts, live keyer, then the measured speed check | 0 failures; each ends "Keyer found" with speed 20; measured speed follows 20, 34, 6, 20 |
 | 5.3 Reconnect | 3 manual unplug/replug cycles by you | each ends "Keyer found" with no manual action; any failure shows its reason in the Message box |
 
 **Done when:** 5.1–5.3 pass with output pasted, and a screenshot of the running app sits beside `keyer-mac-running.png`.
