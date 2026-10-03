@@ -36,7 +36,7 @@ Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Ari
 
 Rows 4–8 are evenly spaced.
 
-**Message box content:** the countdown updates one line in place; other status messages append as new lines; keyer echo appends as it arrives; the box clears on each new connect. Echo appears only when echo-back is on in settings; tests assume the default register has it on (verified in step 2.3).
+**Message box content:** one live countdown line is always the last line and updates in place ("Scanning for keyer… N" during the first scan, "Retrying in N s" ticking down once a second between automatic attempts). Everything else is inserted above it: status lines (identical consecutive ones are not repeated; "Keyer missing" appears once per outage), time-stamped diagnostics (a diagnostic with the same reason as the previous one replaces it with a new time stamp instead of piling up), and keyer echo as it arrives. The box clears on each new connect. Echo appears only when echo-back is on in settings; tests assume the default register has it on (verified in step 2.3).
 
 | Type size (line spacing about 1.3×; no added borders or bold) | Size |
 |---|---|
@@ -50,7 +50,7 @@ Rows 4–8 are evenly spaced.
 1. **Start-up and connect.** The user launches with the keyer plugged in, or plugs it in later.
    - The Message box shows "Scanning for keyer… 8", counting down once a second to 0. The countdown covers the whole first scan including handshake retries; a handshake still running at 0 is allowed to finish before "missing" shows.
    - Success: "Keyer found: WinKeyer vX.Y on <port>, N WPM" (N = the speed actually sent), and the port dropdown selects that port.
-   - No keyer after 0 and any running handshake: "Keyer missing: no WinKeyer detected. Plug it in; it will connect automatically." It keeps rescanning every 2 s; retries back off 1 s, doubling to 30 s.
+   - No keyer found: "Keyer missing: no WinKeyer detected. Plug it in; it will connect automatically." appears as soon as the attempt fails (an instant failure does not wait out the 8 s), followed by a live "Retrying in N s" countdown. The port list is re-read every 2 s, and a newly enumerated WK-mini is tried at once; automatic retries back off 1 s, doubling to 30 s.
    - A keyer plugged in later is found within 2 s of enumeration plus handshake time (8 s at most), no restart.
    - The saved port is tried first if it exists; otherwise only ports with USB ID `1a86:7523` are probed. Other ports are listed in the dropdown but never auto-probed, so unrelated serial devices are not disturbed. Virtual ports (`cu.debug-console`, `cu.Bluetooth-Incoming-Port`) are never auto-selected or saved.
    - A port the user picks or types (Enter) is tried at once and kept until relaunch or disconnect; auto-probing stops while it is set.
