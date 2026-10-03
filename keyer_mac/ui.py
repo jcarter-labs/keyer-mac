@@ -8,6 +8,8 @@ screen list: 0 header, 1 Message box, 2 free-text label, 3 free-text box,
 
 from __future__ import annotations
 
+import inspect
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +25,8 @@ from keyer_mac import ports as ports_mod
 from keyer_mac.bridge import Bridge
 from keyer_mac.settings import Settings
 from keyer_mac.worker import Worker
+
+log = logging.getLogger(__name__)
 
 WATCH_MS = 2000             # re-list ports this often while no keyer is connected
 SCAN_SECONDS = 8
@@ -526,6 +530,7 @@ class MainWindow(QWidget):
         if self._sent_chars > self._last_mark_at:
             self._marks.append(self._sent_chars)
             self._last_mark_at = self._sent_chars
+            log.debug("marker queued at sent=%d by %s", self._sent_chars, inspect.stack()[1].function)
 
     def _unsend(self, n: int) -> None:
         """Characters erased from the keyer's buffer before they were sent."""
@@ -541,6 +546,7 @@ class MainWindow(QWidget):
             self.message.add_echo(ch)
             self._echo_chars += 1
             while self._marks and self._echo_chars >= self._marks[0]:
+                log.debug("marker shown after echo #%d (mark at %d)", self._echo_chars, self._marks[0])
                 self._marks.pop(0)
                 self.message.add_echo(END_OF_MESSAGE)
 
@@ -548,6 +554,8 @@ class MainWindow(QWidget):
         """The keyer finished: close any message whose marker never came (a character
         that is not echoed), and resynchronise the counts."""
         if self._marks:
+            log.debug("idle flush: marker shown, marks=%r sent=%d echoed=%d",
+                      self._marks, self._sent_chars, self._echo_chars)
             self.message.add_echo(END_OF_MESSAGE)
         self._marks.clear()
         self._echo_chars = self._sent_chars

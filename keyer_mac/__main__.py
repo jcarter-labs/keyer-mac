@@ -16,7 +16,10 @@ from keyer_mac.ui import MainWindow
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    debug = os.environ.get("KEYER_MAC_TRACE") == "1"
+    logging.basicConfig(level=logging.DEBUG if debug else logging.WARNING,
+                        format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    logging.getLogger("PIL").setLevel(logging.WARNING)
     app = QApplication(sys.argv)
     win = MainWindow(start_bridge=True, bridge_host=os.environ.get("KEYER_MAC_BRIDGE_HOST", "0.0.0.0"))
     autoquit = os.environ.get("KEYER_MAC_AUTOQUIT") == "1"
