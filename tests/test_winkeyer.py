@@ -107,11 +107,11 @@ def test_send_text_uppercases():
     assert port.written == [b"CQ TEST"]
 
 
-def test_initialize_sends_mode_speed_then_every_pinned_parameter_then_echo():
+def test_initialize_sends_mode_potset_speed_then_every_pinned_parameter_then_echo():
     wk, port, _ = make({b"\x00\x04\x55": b"\x55"})
     assert wk.initialize(0b11001110, 20) is True
     assert port.written == [
-        b"\x0e\xce", b"\x02\x14",
+        b"\x0e\xce", b"\x05\x05\x32\x00", b"\x02\x14",
         b"\x03\x32", b"\x17\x32", b"\x10\x00", b"\x11\x00",
         b"\x12\x32", b"\x0d\x00", b"\x04\x00\x00",
         b"\x00\x04\x55",
@@ -126,3 +126,13 @@ def test_initialize_fails_when_the_echo_test_does_not_answer():
 def test_sidetone_and_pin_config_are_never_written():
     from keyer_mac.winkeyer import PINNED_PARAMETERS
     assert {c for c, _ in PINNED_PARAMETERS}.isdisjoint({0x01, 0x09})
+
+
+def test_speed_pot_setup_precedes_the_speed_command():
+    """Without 05 05 32 00 the live keyer ignored speeds above ~15 WPM (measured
+    by echo timing), so it must come before the speed write, every time."""
+    from keyer_mac.winkeyer import POTSET
+    assert POTSET == bytes([0x05, 0x05, 0x32, 0x00])
+    wk, port, _ = make({b"\x00\x04\x55": b"\x55"})
+    wk.initialize(0b11001110, 34)
+    assert port.written.index(POTSET) < port.written.index(b"\x02\x22")

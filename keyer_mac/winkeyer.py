@@ -33,6 +33,12 @@ PINNED_PARAMETERS = (
     (0x04, (0, 0)),      # PTT lead-in 0, tail 0
 )
 
+# Setup Speed Pot: minimum 5 WPM, range 50 (5-55 WPM), as 1.0 sent on every connect.
+# The WK-mini has no pot, but this command also sets the speed range the keyer
+# accepts from the host: WITHOUT it, speed commands above ~15 WPM were ignored
+# (live, 2026-10-02: set 20 and 34 both measured 15 WPM; with it, 4/4 followed).
+POTSET = bytes([0x05, 0x05, 0x32, 0x00])
+
 SPEED_MIN, SPEED_MAX = 6, 34            # UI dropdown: even values only
 DEFAULT_SPEED = 20
 DEFAULT_MODE_REGISTER = 0b11001110
@@ -136,11 +142,13 @@ class WinKeyer:
     def initialize(self, mode_register: int = DEFAULT_MODE_REGISTER, speed: int = DEFAULT_SPEED) -> bool:
         """After a successful host_open: send every setting, then verify.
 
-        Order (Data sources, step 3): mode register, speed, then the pinned
-        parameters. Speed cannot be read back on the WK-mini (live diagnostic), so the
-        check is: writes did not raise, and the echo test still answers.
+        Order (Data sources, step 3): mode register, speed-pot setup, speed,
+        then the pinned parameters, then the echo test. The keyer cannot report
+        its speed back, but the effect is measurable: the echo timing of sent
+        characters (tools/live_speed_diagnostic.py).
         """
         self.set_mode(mode_register)
+        self._write(POTSET)
         self.set_speed(speed)
         for command, params in PINNED_PARAMETERS:
             self._write(bytes([command, *params]))

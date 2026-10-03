@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Task 5.2 live smoke: N cold starts (fresh processes) of the real app
-against the real WK-mini (default 5).
+against the real WK-mini (default 5), then one measured speed check
+(tools/live_speed_diagnostic.py).
 
 Pass per start: the first line is "Scanning for keyer… 8", countdown lines
 only ever step down by one, and the last line is "Keyer found: WinKeyer
@@ -46,7 +47,11 @@ def main() -> int:
         print(f"{i:2d}: {'PASS' if ok else 'FAIL'} {secs:.1f}s  {' | '.join(lines)}")
         time.sleep(0.3)
     print(f"\n{'PASS' if not failures else 'FAIL'}: {n - failures}/{n} cold starts")
-    return 1 if failures else 0
+    # the speed really changes (echo timing); keys the radio briefly: 100 mW, no antenna
+    r = subprocess.run([sys.executable, str(ROOT / "tools" / "live_speed_diagnostic.py")],
+                       capture_output=True, text=True, timeout=120)
+    print(r.stdout.strip())
+    return 1 if (failures or r.returncode) else 0
 
 
 if __name__ == "__main__":

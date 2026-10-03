@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -90,6 +91,42 @@ def check_4_2() -> bool:
     print(f"  relaunch restores {[f.text() for f in w2.msg_fields]}: {'PASS' if ok2 else 'FAIL'}")
     w2.shutdown()
     return ok1 and ok2
+
+
+def measured_gap_ms(w, seconds: float) -> float:
+    """Average gap between echoed characters, measured through the real window."""
+    marks = []                                    # (time, characters received so far)
+    count = [0]
+
+    def on_echo(text):
+        count[0] += len(text)
+        marks.append((time.monotonic(), count[0]))
+
+    w.worker.echoed.connect(on_echo)
+    w.free_text.clear()
+    w.free_text.insertPlainText("EEEEEEEEEEEE")        # 12 E's -> 11 gaps (poll jitter is 100 ms)
+    wait_until(lambda: count[0] >= 12, seconds, "12 echoes")
+    w.worker.echoed.disconnect(on_echo)
+    if len(marks) < 2 or marks[-1][1] == marks[0][1]:
+        return float("nan")
+    return (marks[-1][0] - marks[0][0]) * 1000 / (marks[-1][1] - marks[0][1])
+
+
+def check_speed_effect() -> bool:
+    """The functional check that was missing: the dropdown really changes the CW speed."""
+    w = start()
+    ok = True
+    for wpm in (20, 34, 6, 20):
+        w.speed_box.setCurrentIndex(w.speed_box.findData(wpm))
+        QTest.qWait(300)
+        want = 4 * 1200 / wpm
+        got = measured_gap_ms(w, 3 + 12 * want / 1000)
+        good = abs(got - want) / want < 0.25
+        ok = ok and good
+        print(f"  dropdown {wpm}: measured gap {got:.0f} ms, expected {want:.0f} ms: {'PASS' if good else 'FAIL'}")
+        QTest.qWait(500)
+    w.shutdown()
+    return ok
 
 
 def check_4_3() -> bool:
@@ -229,7 +266,7 @@ def check_4_5() -> bool:
     return all(results)
 
 
-CHECKS = {"4.5": check_4_5, "port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
+CHECKS = {"speed": check_speed_effect, "4.5": check_4_5, "port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
 
 
 def main() -> int:

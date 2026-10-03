@@ -15,6 +15,7 @@ P = namedtuple("P", "device vid pid")
 WK = P("/dev/cu.usbserial-SIM", 0x1A86, 0x7523)
 
 PINNED = [bytes([c, *p]) for c, p in winkeyer.PINNED_PARAMETERS]
+POTSET = winkeyer.POTSET
 
 
 class World:
@@ -111,7 +112,7 @@ def test_scan_finds_the_keyer_and_sends_every_setting_in_order(h):
     assert h.names() == ["found"]
     assert h.events[0][1] == (WK.device, 0x1F, 20)
     assert h.world.ports[0].written == [
-        b"\x00\x03", b"\x00\x02", b"\x0e\xce", b"\x02\x14", *PINNED, b"\x00\x04\x55"]
+        b"\x00\x03", b"\x00\x02", b"\x0e\xce", POTSET, b"\x02\x14", *PINNED, b"\x00\x04\x55"]
 
 
 def test_missing_retries_every_8_s_forever_with_no_growing_delay(h):
@@ -153,7 +154,7 @@ def test_settings_are_resent_from_current_values_on_every_connect(h):
     h.worker.set_speed(24)                  # changed while disconnected: remembered, not sent
     h.world.plug(); h.fire_next_retry()
     second = h.world.ports[-1].written
-    assert second[:4] == [b"\x00\x03", b"\x00\x02", b"\x0e\xce", b"\x02\x18"]
+    assert second[:5] == [b"\x00\x03", b"\x00\x02", b"\x0e\xce", POTSET, b"\x02\x18"]
     assert b"\x02\x1e" in h.world.ports[0].written        # 30 was sent live
 
 
@@ -221,7 +222,7 @@ def test_50_simulated_unplug_replug_cycles_all_reconnect_with_fresh_settings(h):
         h.world.plug()
         h.fire_next_retry()                          # succeeds
         port = h.world.ports[-1]
-        expected = [b"\x00\x03", b"\x00\x02", b"\x0e\xce", bytes([2, speed]), *PINNED, b"\x00\x04\x55"]
+        expected = [b"\x00\x03", b"\x00\x02", b"\x0e\xce", POTSET, bytes([2, speed]), *PINNED, b"\x00\x04\x55"]
         failures += (not h.worker.connected) or port.written != expected
         h.scheduled.clear()
     assert failures == 0
