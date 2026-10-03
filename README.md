@@ -18,19 +18,20 @@ source .venv/bin/activate
 python3 -m keyer_mac
 ```
 
-Verified 2026-09-08 against a real K1EL WinKeyer at
-`/dev/cu.usbserial-8340`: window opens titled "keyer-mac", device
-dropdown auto-detects the connected WinKeyer, all 6 canned-message
-fields/buttons and the settings gear are present. (Speed starts at 20 WPM;
-the WK-mini has no speed pot, so pot input is ignored.) Config persists to
-`~/.keyer-mac.json` (set `KEYER_MAC_CONFIG_PATH` to redirect it, e.g.
-for tests).
+Plug the WinKeyer Mini in first or after: the Message box shows a
+"Scanning for keyer… 8" countdown, then "Keyer found: WinKeyer v3.1 on
+/dev/cu.usbserial-…, 20 WPM". If it cannot connect it says why, with a time
+stamp, and tries again every 8 s; plugging the keyer in connects within about
+2 s. Config persists to `~/.keyer-mac.json` (set `KEYER_MAC_CONFIG_PATH` to
+redirect it, e.g. for tests).
 
-![keyer-mac running](keyer-mac-running.png)
+![keyer-mac 1.1](keyer-mac-1.1.png)
 
-Screenshot from 2026-09-13: window launched with no WinKeyer attached,
-showing the "Unable to open serial port" status line, default 20 WPM
-speed, and the msg 1–6 canned-message buttons.
+v1.1 is checked on a real WK-mini (firmware 3.1), 2026-10-02: handshake, free
+text, five canned messages, speed 6–34 WPM, the settings dialog, all six
+XMLRPC methods, and three manual unplug/replug cycles. Numeric layout targets
+are in `tools/ui_targets.json`; `python3 tools/ui_fidelity_check.py` measures
+the real window against them.
 
 ## License
 
@@ -38,6 +39,5 @@ GPL-3.0-or-later, inherited from the source project. See `LICENSE`.
 
 ## Status
 
-v1.0 built (Tasks 0–6 in `masterplan-old.md`). v1.1 is specified in
-`idea.md`: WinKeyer Mini only, 5 canned messages, Info button, Arial font, a
-rebuilt start-up sequence, and a scan countdown. Not built yet.
+v1.1 built per `masterplan.md` (from `idea.md`). The v1.0 plan is kept as
+`masterplan-old.md`. Known limitations are listed in `masterplan.md`.
