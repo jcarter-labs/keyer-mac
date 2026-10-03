@@ -61,10 +61,9 @@ def test_dialog_shows_the_text_and_closing_changes_nothing(win, qtbot):
 
 
 def test_info_button_sits_left_of_the_gear_in_row_0(win):
-    g = win.grid
-    ri, ci, *_ = g.getItemPosition(g.indexOf(win.info_button))
-    rg, cg, *_ = g.getItemPosition(g.indexOf(win.gear))
-    assert ri == rg == 0 and ci < cg
+    win.show()
+    assert win.info_button.y() == win.gear.y() < win.message.y()
+    assert win.header_label.x() < win.info_button.x() < win.gear.x() < win.port_box.x()
 
 
 def test_version_constants():

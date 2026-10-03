@@ -25,10 +25,9 @@ def test_footer_text_equals_the_constants(win):
 
 
 def test_footer_is_the_last_row_left_and_right(win):
-    g = win.grid
-    rd, cd, *_ = g.getItemPosition(g.indexOf(win.date_label))
-    rv, cv, *_ = g.getItemPosition(g.indexOf(win.version_label))
-    assert rd == rv == 9 and cd < cv
+    win.show()
+    assert win.date_label.x() < win.version_label.x()
+    assert win.date_label.y() == win.version_label.y() > win.msg_fields[4].y()
     assert win.date_label.font().pointSize() == win.version_label.font().pointSize() == 11
 
 

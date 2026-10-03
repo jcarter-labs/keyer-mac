@@ -13,8 +13,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
-from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QGridLayout, QLabel, QLineEdit,
-                             QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout, QLabel,
+                             QLineEdit, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
 
 import keyer_mac
 from keyer_mac import config, winkeyer
@@ -34,6 +34,21 @@ FONT_FAMILY = "Arial"
 PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
 MSG_BUTTON_WIDTH = 65       # measured from keyer-mac-running.png
 PORT_BOX_WIDTH = 190        # half the 1.0 width (tools/ui_targets.json)
+PORT_BOX_HEIGHT = 26
+MESSAGE_ROW_GAP = 17        # measured from keyer-mac-running.png
+WINDOW_WIDTH = 579
+BORDER = "#b6b6b6"
+STYLE = f"""
+QWidget {{ background:{WINDOW_BG}; font-family:{FONT_FAMILY}; }}
+QLabel {{ background:transparent; }}
+QPlainTextEdit, QLineEdit {{ background:{FIELD_BG}; border:1px solid {BORDER}; border-radius:3px; }}
+QComboBox {{ background:{FIELD_BG}; border:1px solid {BORDER}; border-radius:4px; padding:0px 6px; }}
+QComboBox QLineEdit {{ border:none; }}
+QComboBox QAbstractItemView {{ background:{FIELD_BG}; }}
+QPushButton {{ background:#f7f7f7; border:1px solid {BORDER}; border-radius:5px; padding:3px 8px; }}
+QPushButton:pressed {{ background:#dcdcdc; }}
+QTextBrowser {{ background:{FIELD_BG}; }}
+"""
 SETTINGS_UI = Path(__file__).resolve().parent / "settings.ui"
 
 
@@ -41,6 +56,12 @@ def arial(pt: int) -> QFont:
     font = QFont(FONT_FAMILY)
     font.setPointSize(pt)
     return font
+
+
+def box_height_for_lines(box: QPlainTextEdit, lines: int) -> int:
+    """Widget height whose viewport shows exactly `lines` text lines."""
+    return (lines * box.fontMetrics().lineSpacing() + 2 * int(box.document().documentMargin())
+            + 2 * box.frameWidth())
 
 
 def diff_edit(old: str, new: str) -> tuple[int, str]:
@@ -88,7 +109,7 @@ class InfoDialog(QDialog):
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle("keyer-mac info")
-        self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:{FONT_FAMILY};}}")
+        self.setStyleSheet(STYLE)
         layout = QVBoxLayout(self)
         self.body = QTextBrowser()
         self.body.setFont(arial(PT_LABEL))
@@ -111,8 +132,7 @@ class MessageBox(QPlainTextEdit):
         super().__init__()
         self.setReadOnly(True)
         self.setFont(arial(PT_ENTRY))
-        self.setStyleSheet(f"background:{FIELD_BG};")
-        self.setFixedHeight(3 * self.fontMetrics().lineSpacing() + 2 * self.frameWidth() + 12)
+        self.setFixedHeight(box_height_for_lines(self, 3))
         self.lines: list[str] = []
         self.kinds: list[str] = []
 
@@ -163,7 +183,7 @@ class MainWindow(QWidget):
                  bridge_host: str = "0.0.0.0", bridge_port: int = 8000):
         super().__init__()
         self.setWindowTitle("keyer-mac")
-        self.setStyleSheet(f"QWidget{{background:{WINDOW_BG};font-family:{FONT_FAMILY};}}")
+        self.setStyleSheet(STYLE)
         self.cfg = cfg if cfg is not None else config.load()
         self._list_ports = list_ports
         self._seen_candidates: set[str] = set()
@@ -175,86 +195,102 @@ class MainWindow(QWidget):
         self._scanning = False
         self._old_text = ""
 
-        grid = QGridLayout(self)
-        grid.setContentsMargins(15, 15, 15, 15)
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(4)
-        self.grid = grid
+        root = QVBoxLayout(self)
+        root.setContentsMargins(15, 15, 15, 15)
+        root.setSpacing(4)
+        self.root = root
+        al_left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        al_right = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
-        # header row 0: "Message" label, Info, settings gear, port dropdown
+        # row 0: "Message" label, Info, settings gear ... port dropdown (right)
+        header = QHBoxLayout()
+        header.setSpacing(10)
         self.header_label = QLabel("Message")
         self.header_label.setFont(arial(PT_LABEL))
-        grid.addWidget(self.header_label, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.info_button = QPushButton("Info")
         self.info_button.setFont(arial(PT_LABEL))
         self.info_button.clicked.connect(self.open_info)
-        grid.addWidget(self.info_button, 0, 1)
         self.gear = QPushButton("⚙")
         self.gear.setFont(arial(PT_LABEL))
         self.gear.clicked.connect(self.open_settings)
-        grid.addWidget(self.gear, 0, 2)
         self._firmware: int | None = None
         # port dropdown: editable; picking or typing a port tries it at once
         self.port_box = QComboBox()
         self.port_box.setEditable(True)
         self.port_box.setFont(arial(PT_DROPDOWN))
-        self.port_box.setStyleSheet(f"background:{FIELD_BG};")
-        self.port_box.setMinimumWidth(PORT_BOX_WIDTH)
-        self.port_box.setMaximumWidth(PORT_BOX_WIDTH)
-        grid.addWidget(self.port_box, 0, 3, 1, 3, Qt.AlignmentFlag.AlignRight)
+        self.port_box.setFixedSize(PORT_BOX_WIDTH, PORT_BOX_HEIGHT)
+        for widget in (self.header_label, self.info_button, self.gear):
+            header.addWidget(widget)
+        header.addStretch(1)
+        header.addWidget(self.port_box)
+        root.addLayout(header)
         self.refresh_ports()
         self.port_box.activated.connect(lambda _i: self._port_chosen())
         self.port_box.lineEdit().editingFinished.connect(self._port_chosen)
-        self.message = MessageBox()                       # row 1
-        grid.addWidget(self.message, 1, 0, 1, 6)
-        self.free_label = QLabel("Free text input")       # row 2
+
+        # row 1: Message box
+        self.message = MessageBox()
+        root.addWidget(self.message)
+
+        # row 2: "Free text input" (left); "Speed:" + speed dropdown (right)
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+        self.free_label = QLabel("Free text input")
         self.free_label.setFont(arial(PT_LABEL))
-        grid.addWidget(self.free_label, 2, 0, 1, 3, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        # 4.3 speed: even values 6-34 WPM, right side of row 2
         self.speed_label = QLabel("Speed:")
         self.speed_label.setFont(arial(PT_LABEL))
-        grid.addWidget(self.speed_label, 2, 3, 1, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.speed_box = QComboBox()
         self.speed_box.setFont(arial(PT_DROPDOWN))
-        self.speed_box.setStyleSheet(f"background:{FIELD_BG};")
         for wpm in range(winkeyer.SPEED_MIN, winkeyer.SPEED_MAX + 1, 2):
             self.speed_box.addItem(str(wpm), wpm)
         self.speed_box.setCurrentIndex(self.speed_box.findData(self.cfg["speed"]))
-        grid.addWidget(self.speed_box, 2, 5)
         self.speed_box.currentIndexChanged.connect(self._speed_chosen)
-        self.free_text = QPlainTextEdit()                 # row 3
-        self.free_text.setFont(arial(PT_ENTRY))
-        self.free_text.setStyleSheet(f"background:{FIELD_BG};")
-        self.free_text.setFixedHeight(3 * self.free_text.fontMetrics().lineSpacing()
-                                      + 2 * self.free_text.frameWidth() + 12)
-        grid.addWidget(self.free_text, 3, 0, 1, 6)
-        self.free_text.textChanged.connect(self._free_text_changed)
+        row2.addWidget(self.free_label, 0, al_left)
+        row2.addStretch(1)
+        row2.addWidget(self.speed_label, 0, al_right)
+        row2.addWidget(self.speed_box)
+        root.addLayout(row2)
 
-        # 4.2 five canned messages, rows 4-8
+        # row 3: free-text box
+        self.free_text = QPlainTextEdit()
+        self.free_text.setFont(arial(PT_ENTRY))
+        self.free_text.setFixedHeight(box_height_for_lines(self.free_text, 3))
+        self.free_text.textChanged.connect(self._free_text_changed)
+        root.addWidget(self.free_text)
+
+        # rows 4-8: five canned messages, 17 px apart (measured)
+        msg_grid = QGridLayout()
+        msg_grid.setHorizontalSpacing(10)
+        msg_grid.setVerticalSpacing(MESSAGE_ROW_GAP)
+        msg_grid.setColumnStretch(0, 1)
         self.msg_fields: list[QLineEdit] = []
         self.msg_buttons: list[QPushButton] = []
         for i in range(5):
             field = QLineEdit(self.cfg.get(str(i + 1), ""))
             field.setFont(arial(PT_ENTRY))
-            field.setStyleSheet(f"background:{FIELD_BG};")
             button = QPushButton(f"msg {i + 1}")
             button.setFont(arial(PT_LABEL))
             button.setFixedWidth(MSG_BUTTON_WIDTH)
-            grid.addWidget(field, 4 + i, 0, 1, 5)
-            grid.addWidget(button, 4 + i, 5)
+            msg_grid.addWidget(field, i, 0)
+            msg_grid.addWidget(button, i, 1)
             field.textChanged.connect(lambda _text, n=i: self._message_edited(n))
             button.clicked.connect(lambda _checked=False, n=i: self.send_message(n))
             self.msg_fields.append(field)
             self.msg_buttons.append(button)
+        root.addLayout(msg_grid)
 
-        # 4.7 footer, row 9: build date left, version right
+        # row 9: footer, build date left, version right
+        footer = QHBoxLayout()
         self.date_label = QLabel(keyer_mac.__build_date__)
         self.date_label.setFont(arial(PT_FOOTER))
-        grid.addWidget(self.date_label, 9, 0, 1, 3, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.version_label = QLabel(f"v{keyer_mac.__version__}")
         self.version_label.setFont(arial(PT_FOOTER))
-        grid.addWidget(self.version_label, 9, 3, 1, 3, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.resize(579, 220)
+        footer.addWidget(self.date_label, 0, al_left)
+        footer.addStretch(1)
+        footer.addWidget(self.version_label, 0, al_right)
+        root.addLayout(footer)
+        self.setFixedWidth(WINDOW_WIDTH)
+        self.adjustSize()
 
         self._thread = QThread()
         self.worker = worker or Worker()
