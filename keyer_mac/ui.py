@@ -33,7 +33,6 @@ WINDOW_BG = "#ededed"
 FIELD_BG = "#ffffff"
 FONT_FAMILY = "Arial"
 PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
-PT_PORT = 12                # the port name is secondary information: smaller, quieter
 PT_GEAR = 20                # the gear glyph needs to be big to read as a gear
 CONTROL_HEIGHT = 26         # Info, gear and both dropdowns share one height
 HEADER_GAP = 10             # Info | gear | port box spacing
@@ -96,7 +95,7 @@ def diff_edit(old: str, new: str) -> tuple[int, str]:
     return len(old) - common, new[common:]
 
 
-INFO_SUMMARY = "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB."
+INFO_SUMMARY = "Keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB."
 REPO = "jcarter-labs/keyer-mac"
 REPO_URL = "https://github.com/jcarter-labs/keyer-mac"
 
@@ -129,7 +128,7 @@ def info_text(port: str | None, firmware: int | None, config_file, xmlrpc: str) 
 class InfoDialog(QDialog):
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("keyer-mac info")
+        self.setWindowTitle("Keyer-mac info")
         self.setStyleSheet(STYLE)
         layout = QVBoxLayout(self)
         self.body = QTextBrowser()
@@ -223,7 +222,7 @@ class MainWindow(QWidget):
                  list_ports=ports_mod.list_ports, start_bridge: bool = False,
                  bridge_host: str = "0.0.0.0", bridge_port: int = 8000):
         super().__init__()
-        self.setWindowTitle("keyer-mac")
+        self.setWindowTitle("Keyer-mac")
         self.setStyleSheet(STYLE)
         self.cfg = cfg if cfg is not None else config.load()
         self._list_ports = list_ports
@@ -263,7 +262,7 @@ class MainWindow(QWidget):
         # port dropdown: editable; picking or typing a port tries it at once
         self.port_box = QComboBox()
         self.port_box.setEditable(True)
-        self.port_box.setFont(arial(PT_PORT))
+        self.port_box.setFont(arial(PT_DROPDOWN))
         self.port_box.setView(QListView())
         self.port_box.setFixedSize(PORT_BOX_WIDTH, CONTROL_HEIGHT)
         header.addWidget(self.header_label)

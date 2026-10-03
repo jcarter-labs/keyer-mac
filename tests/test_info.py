@@ -24,7 +24,7 @@ def win(qtbot, tmp_path, monkeypatch):
 def test_summary_line_comes_first_and_says_what_the_app_is():
     text = info_text("/dev/cu.usbserial-1", 0x1F, "/x/cfg.json", "0.0.0.0:8000")
     assert text.splitlines()[0] == INFO_SUMMARY
-    assert INFO_SUMMARY == "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB."
+    assert INFO_SUMMARY == "Keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB."
 
 
 def test_every_required_item_is_listed():

@@ -127,4 +127,4 @@ def test_speed_box_is_wide_enough_for_its_popup_and_the_gear_glyph_is_big(qtbot,
     r = Rig(qtbot, [WK])
     assert r.win.speed_box.width() >= 60
     assert r.win.gear.font().pointSize() == 20
-    assert r.win.port_box.font().pointSize() == 12
+    assert r.win.port_box.font().pointSize() == 14

@@ -53,7 +53,7 @@ def build_targets() -> dict:
             "window_background": win["window"]["background"],
             "field_fill": win["text_boxes"][0]["fill"],
             "font_family": "Arial",
-            "font_pt": {"entry_and_display": 16, "speed_dropdown": 14, "port_dropdown": 12,
+            "font_pt": {"entry_and_display": 16, "dropdowns": 14,
                         "labels_and_buttons": 13, "gear_glyph": 20, "footer": 11},
             "header_gap": 10,
             "control_height": 26,
@@ -81,7 +81,7 @@ def check_window(targets: dict, out_png: str) -> list[tuple[str, bool, str]]:
     import keyer_mac
     from keyer_mac import config
     from keyer_mac.ui import (FONT_FAMILY, PT_DROPDOWN, PT_ENTRY, PT_FOOTER, PT_GEAR, PT_LABEL,
-                              PT_PORT, MainWindow)
+                              MainWindow)
 
     t = targets["targets_1_1"]
     tol = targets["tolerance_px"]
@@ -154,8 +154,7 @@ def check_window(targets: dict, out_png: str) -> list[tuple[str, bool, str]]:
         return f.family() == FONT_FAMILY and f.pointSize() == pt
     groups = {
         f"{PT_ENTRY} pt entry/display": [win.message, win.free_text, *win.msg_fields],
-        f"{PT_DROPDOWN} pt speed dropdown": [win.speed_box],
-        f"{PT_PORT} pt port dropdown": [win.port_box],
+        f"{PT_DROPDOWN} pt dropdowns": [win.speed_box, win.port_box],
         f"{PT_LABEL} pt labels/buttons": [win.header_label, win.free_label, win.speed_label, win.info_button,
                                           *win.msg_buttons],
         f"{PT_GEAR} pt gear glyph": [win.gear],

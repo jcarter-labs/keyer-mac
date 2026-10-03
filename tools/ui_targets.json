@@ -103,12 +103,11 @@
     "field_fill": "#ffffff",
     "font_family": "Arial",
     "font_pt": {
+      "dropdowns": 14,
       "entry_and_display": 16,
       "footer": 11,
       "gear_glyph": 20,
-      "labels_and_buttons": 13,
-      "port_dropdown": 12,
-      "speed_dropdown": 14
+      "labels_and_buttons": 13
     },
     "free_text_box_lines": 3,
     "header_gap": 10,

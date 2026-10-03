@@ -16,14 +16,14 @@ keyer-mac v1.1 is a macOS auto keyer for the K1EL WinKeyer Mini over USB. The op
 
 ## Screen list
 
-Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Arial throughout. Background gray `#ededed`; the two text boxes and five message fields white `#ffffff`. Precedence when the two screenshots differ: this plan's stated changes, then `keyer-mac-running.png` (widget style, spacing, window chrome), then `keyer-win-ui.png` (row order, element set, gray window with white fields; its "send msg N" text and "K6GTE PyWinKeyer" title are stale and ignored). The connected state is shown in `keyer-mac-1.1.png` (rendered from the real window). Heights come from the layout; every numeric target, including width, is the measured value in `tools/ui_targets.json`, and the 579 pt here is only the starting value.
+Window "Keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Arial throughout. Background gray `#ededed`; the two text boxes and five message fields white `#ffffff`. Precedence when the two screenshots differ: this plan's stated changes, then `keyer-mac-running.png` (widget style, spacing, window chrome), then `keyer-win-ui.png` (row order, element set, gray window with white fields; its "send msg N" text and "K6GTE PyWinKeyer" title are stale and ignored). The connected state is shown in `keyer-mac-1.1.png` (rendered from the real window). Heights come from the layout; every numeric target, including width, is the measured value in `tools/ui_targets.json`, and the 579 pt here is only the starting value.
 
 | # | Element | Type | Where it sits |
 |---|---|---|---|
 | 1 | "Message" | label | Row 0, far left, vertically centered |
 | 2 | "Info" | button | Row 0, right group: left of the gear, 10 pt gap |
 | 3 | ⚙ | button, 34 pt wide, glyph 20 pt (opens settings dialog) | Row 0, between Info and the port dropdown, 10 pt gaps either side |
-| 4 | Port dropdown | editable combo box, 12 pt; shows the name without `/dev/cu.` (full path in the tooltip and the list tooltips); a typed bare name gets `/dev/cu.` added | Row 0, right-aligned to the margin, 190 pt wide (half the 1.0 width), right of the gear |
+| 4 | Port dropdown | editable combo box, 14 pt; shows the name without `/dev/cu.` (full path in the tooltip and the list tooltips); a typed bare name gets `/dev/cu.` added | Row 0, right-aligned to the margin, 190 pt wide (half the 1.0 width), right of the gear |
 | 5 | Message box | read-only text, 3 lines, white | Row 1, full width, left-justified; sent text and status |
 | 6 | "Free text input" | label | Row 2, far left |
 | 7 | "Speed:" | label | Row 2, right-justified, directly left of the speed dropdown |
@@ -41,8 +41,7 @@ Rows 4–8 are evenly spaced. Info, ⚙, the port dropdown and the speed dropdow
 | Type size (line spacing about 1.3×; no added borders or bold) | Size |
 |---|---|
 | Message box, free-text input, message fields 1–5 | 16 pt |
-| Speed dropdown | 14 pt |
-| Port dropdown (secondary information) | 12 pt |
+| Port dropdown, speed dropdown | 14 pt |
 | Labels, Info/"msg N" buttons | 13 pt |
 | ⚙ glyph | 20 pt |
 | Footer (date, "v1.1") | 11 pt |
@@ -65,7 +64,7 @@ Rows 4–8 are evenly spaced. Info, ⚙, the port dropdown and the speed dropdow
 4. **Speed.** Even values 6, 8 … 34 WPM, default 20. Picking a value sends it at once and saves it as `speed`; the dropdown always shows the value last sent. The WK-mini has no pot, so no pot input changes it. XMLRPC `setspeed` updates the dropdown too.
 5. **Settings (⚙).** The dialog sets Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace and CT spacing. Saving packs the mode register (default `11001110`), writes it to the keyer, and saves it as `mode_register`. Cancel changes nothing.
 6. **XMLRPC bridge.** `http://<host>:8000`, bound to `0.0.0.0`, no authentication. Methods: `k1elsendstring(str)`, `setspeed(int)`, `sendblended(str)`, `tuneon()`, `tuneoff()`, `clearbuffer()`. `setspeed` accepts only even values 6–34; anything else returns an XMLRPC fault and changes nothing. Pass: a call from another process sends the string and returns within 1 s. If port 8000 is in use, the app still starts and says so in the Message box.
-7. **Info.** The button opens a dialog that starts with "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB," then: version, connected port, WinKeyer firmware, config-file path, XMLRPC address and methods, the mbridak attribution and GPL notice, "Designed to work with the K1EL WinKeyer Mini," and `jcarter-labs/keyer-mac` with its URL. Closing changes nothing.
+7. **Info.** The button opens a dialog that starts with "Keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB," then: version, connected port, WinKeyer firmware, config-file path, XMLRPC address and methods, the mbridak attribution and GPL notice, "Designed to work with the K1EL WinKeyer Mini," and `jcarter-labs/keyer-mac` with its URL. Closing changes nothing.
 8. **Diagnostics.** When a connect or a send fails, the Message box adds a line `HH:MM:SS <what failed>: <reason>`: no WinKeyer-mini visible; port could not be opened (with the system error); opened but no answer to host open (3 tries); answered but failed the echo test; disconnected, with the cause (serial error, no answer to the idle echo test, or which command's write failed). A successful connect prints none of these.
 9. **Footer.** The date is the build date (`YYYY-MM-DD`), a constant `__build_date__` beside `__version__`, not read from the clock. "v1.1" is the version.
 
