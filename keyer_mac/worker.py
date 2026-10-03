@@ -43,6 +43,7 @@ class Worker(QObject):
     missing = pyqtSignal()
     disconnected = pyqtSignal()
     echoed = pyqtSignal(str)
+    idle = pyqtSignal()                      # the keyer finished sending (busy -> idle)
     note = pyqtSignal(str)                   # text for the Message box
     diagnostic = pyqtSignal(str)             # why something failed (UI adds a time stamp)
     retry_scheduled = pyqtSignal(float)      # seconds until the next automatic attempt
@@ -151,13 +152,16 @@ class Worker(QObject):
         if not self.connected:
             return
         try:
-            text = self.keyer.poll()
+            text, went_idle = self.keyer.poll_with_status()
             now = self._clock()
             if text:
                 self._last_traffic = now
                 self.echoed.emit(text)
-            elif (now - self._last_check >= IDLE_ECHO_S
-                  and now - self._last_traffic >= RECENT_TRAFFIC_S):
+            if went_idle:
+                self._last_traffic = now
+                self.idle.emit()
+            if (not text and not went_idle and now - self._last_check >= IDLE_ECHO_S
+                    and now - self._last_traffic >= RECENT_TRAFFIC_S):
                 self._last_check = now
                 if not self.keyer.echo_test():
                     self._drop("no answer to the idle echo test")

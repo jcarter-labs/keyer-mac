@@ -325,3 +325,15 @@ def test_a_write_error_names_the_command(h):
 def test_a_good_connect_prints_no_diagnostics(h):
     h.worker.scan(None, None, 0b11001110, 20)
     assert diag(h) == []
+
+
+def test_idle_signal_fires_once_when_the_keyer_goes_busy_to_idle(h):
+    idles = []
+    h.worker.idle.connect(lambda: idles.append(1))
+    h.worker.scan(None, None, 0b11001110, 20)
+    h.world.ports[0]._inbox = b"\xc4E\xc0"
+    h.worker.poll()
+    assert idles == [1] and ("echoed", ("E",)) in h.events
+    h.world.ports[0]._inbox = b"\xc0"
+    h.worker.poll()
+    assert idles == [1]

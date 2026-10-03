@@ -112,6 +112,42 @@ def measured_gap_ms(w, seconds: float) -> float:
     return (marks[-1][0] - marks[0][0]) * 1000 / (marks[-1][1] - marks[0][1])
 
 
+def check_marks() -> bool:
+    """'... ' after each sent message; Enter in free text is a marker, never a byte."""
+    w = start()
+    written = []
+    port = w.worker.keyer.port
+    real_write = port.write
+    port.write = lambda data: (written.append(bytes(data)), real_write(data))[1]
+    ok = True
+
+    def expect(label, want, seconds=8):
+        nonlocal ok
+        good = wait_until(lambda: echo_text(w) == want, seconds, label)
+        print(f"  {label}: echo {echo_text(w)!r} (want {want!r}): {'PASS' if good else 'FAIL'}")
+        ok = ok and good
+
+    w.msg_fields[0].setText("E"); w.msg_fields[1].setText("T")
+    w.message.clear_all(); w._reset_message_counts()
+    w.msg_buttons[0].click(); w.msg_buttons[1].click()
+    expect("msg 1 then msg 2", "E... T... ")
+    QTest.qWait(500)
+    w.message.clear_all(); w._reset_message_counts(); written.clear()
+    for chunk in ("E", "\n", "T"):
+        w.free_text.insertPlainText(chunk)
+        QTest.qWait(150)
+    expect("free text E, Enter, T", "E... T")
+    bad = [b for b in written if b"\x0a" in b or b"\x0d" in b]
+    print(f"  no 0x0a / 0x0d byte written for Enter: {'PASS' if not bad else 'FAIL ' + str(bad)}")
+    ok = ok and not bad
+    QTest.qWait(800)
+    w.message.clear_all(); w._reset_message_counts(); w.free_text.clear()
+    w._bridge_send_string("N")
+    expect("XMLRPC-style string 'N'", "N... ")
+    w.shutdown()
+    return ok
+
+
 def check_speed_effect() -> bool:
     """The functional check that was missing: the dropdown really changes the CW speed."""
     w = start()
@@ -266,7 +302,7 @@ def check_4_5() -> bool:
     return all(results)
 
 
-CHECKS = {"speed": check_speed_effect, "4.5": check_4_5, "port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
+CHECKS = {"marks": check_marks, "speed": check_speed_effect, "4.5": check_4_5, "port": check_port, "4.1": check_4_1, "4.2": check_4_2, "4.3": check_4_3, "4.4": check_4_4}
 
 
 def main() -> int:

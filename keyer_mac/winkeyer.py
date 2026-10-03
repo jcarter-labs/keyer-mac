@@ -82,6 +82,7 @@ class WinKeyer:
         self._sleep = sleep
         self._clock = clock
         self.version: int | None = None
+        self._busy = False
 
     # -- low level -------------------------------------------------------
     def _write(self, data: bytes) -> None:
@@ -164,7 +165,12 @@ class WinKeyer:
         self._write(bytes([CMD_SET_SPEED, wpm]))
 
     def send_text(self, text: str) -> None:
-        self._write(text.upper().encode("ascii", "ignore"))
+        """Send printable ASCII only. Bytes below 0x20 are keyer COMMANDS (0x0A is
+        Clear Buffer, 0x0D is Farnsworth and swallows the next byte), so they are
+        never passed through as text (live probe, 2026-10-02)."""
+        data = bytes(b for b in text.upper().encode("ascii", "ignore") if 0x20 <= b < 0x7F)
+        if data:
+            self._write(data)
 
     # -- sending and status ------------------------------------------------
     def send_blended(self, text: str) -> None:
@@ -187,5 +193,17 @@ class WinKeyer:
     def poll(self) -> str:
         """Read whatever the keyer has sent. Returns the echoed characters;
         status bytes (0xc0-0xff) and other control bytes are dropped."""
+        return self.poll_with_status()[0]
+
+    def poll_with_status(self) -> tuple[str, bool]:
+        """(echoed characters, went_idle). A status byte 0xc0-0xff carries the
+        BUSY flag in bit 2; went_idle is True when busy changed to idle."""
         data = self.port.read(64)
-        return "".join(chr(b) for b in data if 0x20 <= b < 0x80)
+        went_idle = False
+        for b in data:
+            if b >= 0xC0:
+                busy = bool(b & 0x04)
+                if self._busy and not busy:
+                    went_idle = True
+                self._busy = busy
+        return "".join(chr(b) for b in data if 0x20 <= b < 0x80), went_idle

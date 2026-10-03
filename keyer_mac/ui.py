@@ -84,6 +84,14 @@ def box_height_for_lines(box: QPlainTextEdit, lines: int) -> int:
             + 2 * box.frameWidth())
 
 
+END_OF_MESSAGE = "... "     # shown in the Message box after each sent message
+
+
+def is_sendable(ch: str) -> bool:
+    """Printable ASCII only; control characters are keyer commands, never text."""
+    return 0x20 <= ord(ch) < 0x7F
+
+
 def diff_edit(old: str, new: str) -> tuple[int, str]:
     """(backspaces, text to send) that turn `old` into `new` at the keyer:
     erase back to the common prefix, then send what follows it."""
@@ -235,6 +243,8 @@ class MainWindow(QWidget):
         self._scanning = False
         self._missing_shown = False
         self._old_text = ""
+        self._sent_chars = self._echo_chars = self._last_mark_at = 0
+        self._marks: list[int] = []         # sent-character counts after which "... " is shown
 
         root = QVBoxLayout(self)
         root.setContentsMargins(15, 15, 15, 15)
@@ -351,7 +361,8 @@ class MainWindow(QWidget):
         self.worker.found.connect(self._on_found)
         self.worker.missing.connect(self._on_missing)
         self.worker.disconnected.connect(self._on_disconnected)
-        self.worker.echoed.connect(self.message.add_echo)
+        self.worker.echoed.connect(self._on_echo)
+        self.worker.idle.connect(self._on_idle)
         self.worker.note.connect(self._on_note)
         self.worker.diagnostic.connect(self._on_diagnostic)
         self.worker.retry_scheduled.connect(self._on_retry_scheduled)
@@ -360,7 +371,7 @@ class MainWindow(QWidget):
         self._timer.timeout.connect(self._tick)
         # 4.5 XMLRPC bridge: calls become signals into the worker / this window
         self.bridge = Bridge(bridge_host, bridge_port, is_connected=lambda: self._connected)
-        self.bridge.send_string.connect(self.worker.send_text)
+        self.bridge.send_string.connect(self._bridge_send_string)
         self.bridge.send_blended.connect(self.worker.send_blended)
         self.bridge.set_speed.connect(self._bridge_set_speed)
         self.bridge.tune_on.connect(self.worker.tune_on)
@@ -454,6 +465,7 @@ class MainWindow(QWidget):
         self.port_box.setToolTip(device)
         self.port_box.blockSignals(False)
         self.message.clear_all()
+        self._reset_message_counts()
         text = f"Keyer found: WinKeyer v{winkeyer.format_version(version)} on {device}, {speed} WPM"
         self.message.add_line(text)
         self._record(text)
@@ -493,11 +505,69 @@ class MainWindow(QWidget):
     def _free_text_changed(self) -> None:
         new = self.free_text.toPlainText()
         backspaces, text = diff_edit(self._old_text, new)
+        removed = self._old_text[len(self._old_text) - backspaces:] if backspaces else ""
         self._old_text = new
-        for _ in range(backspaces):
+        erase = sum(1 for c in removed if is_sendable(c))     # a removed newline was never sent
+        for _ in range(erase):
             self.sig_backspace.emit()
-        if text:
-            self.sig_send_text.emit(text)
+        self._unsend(erase)
+        run = ""
+        for ch in text:
+            if ch in "\r\n":                                   # Enter ends a message; never sent
+                self._send_run(run)
+                run = ""
+                self._mark_message_end()
+            elif is_sendable(ch):
+                run += ch
+        self._send_run(run)
+
+    # -- "... " after each sent message ---------------------------------------------
+    def _send_run(self, run: str) -> None:
+        if run:
+            self.sig_send_text.emit(run)
+            self._sent_chars += len(run)
+
+    def _mark_message_end(self) -> None:
+        """Remember that a message ended after the characters sent so far."""
+        if self._sent_chars > self._last_mark_at:
+            self._marks.append(self._sent_chars)
+            self._last_mark_at = self._sent_chars
+
+    def _unsend(self, n: int) -> None:
+        """Characters erased from the keyer's buffer before they were sent."""
+        pending = max(self._sent_chars - self._echo_chars, 0)
+        k = min(n, pending)
+        self._sent_chars -= k
+        self._marks = [m for m in self._marks if m <= self._sent_chars]
+        self._last_mark_at = min(self._last_mark_at, self._sent_chars)
+
+    def _on_echo(self, text: str) -> None:
+        """Show the keyer's echo; insert "... " right after the last character of each message."""
+        for ch in text:
+            self.message.add_echo(ch)
+            self._echo_chars += 1
+            while self._marks and self._echo_chars >= self._marks[0]:
+                self._marks.pop(0)
+                self.message.add_echo(END_OF_MESSAGE)
+
+    def _on_idle(self) -> None:
+        """The keyer finished: close any message whose marker never came (a character
+        that is not echoed), and resynchronise the counts."""
+        if self._marks:
+            self.message.add_echo(END_OF_MESSAGE)
+        self._marks.clear()
+        self._echo_chars = self._sent_chars
+        self._last_mark_at = min(self._last_mark_at, self._sent_chars)
+
+    def _reset_message_counts(self) -> None:
+        self._sent_chars = self._echo_chars = self._last_mark_at = 0
+        self._marks.clear()
+
+    def _bridge_send_string(self, text: str) -> None:
+        run = "".join(c for c in text if is_sendable(c))
+        self._send_run(run)
+        if run:
+            self._mark_message_end()
 
     # -- 4.6 Info ---------------------------------------------------------------------
     def info_body(self) -> str:
@@ -553,9 +623,10 @@ class MainWindow(QWidget):
         config.save(self.cfg)
 
     def send_message(self, index: int) -> None:
-        text = self.msg_fields[index].text()
-        if text:
-            self.sig_send_text.emit(text)
+        run = "".join(c for c in self.msg_fields[index].text() if is_sendable(c))
+        if run:
+            self._send_run(run)
+            self._mark_message_end()
 
     # -- lifecycle ---------------------------------------------------------------
     def shutdown(self) -> None:
