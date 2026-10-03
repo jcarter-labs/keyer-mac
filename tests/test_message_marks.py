@@ -64,27 +64,32 @@ def test_queued_messages_each_get_a_marker(win):
     assert echo_line(win) == "A... B... "
 
 
-def test_enter_in_free_text_is_a_marker_not_a_byte(win):
-    for chunk in ("E", "\n", "T"):
+def test_free_text_gets_no_marker_and_enter_does_nothing(win):
+    for chunk in ("E", "\n", "T", " ", "A"):
         win.free_text.insertPlainText(chunk)
-    assert win.sent == ["E", "T"]               # the newline never reaches the keyer
-    win._on_echo("E"); win._on_echo("T")
-    assert echo_line(win) == "E... T"
+    assert win.sent == ["E", "T", " ", "A"]       # Enter never reaches the keyer
+    assert win._marks == []                       # and creates no marker
+    win._on_echo("ET A")
+    assert echo_line(win) == "ET A"
 
 
-def test_enter_with_nothing_new_sent_adds_no_marker(win):
-    win.free_text.insertPlainText("\n\n")
-    win.free_text.insertPlainText("E")
-    win.free_text.insertPlainText("\n\n")
-    assert win._marks == [1]
-    assert win.sent == ["E"]
+def test_free_text_never_produces_an_ellipsis_whatever_the_echo_and_idle_timing(win):
+    """Typing, echoes and idle events interleaved every way: no '...' ever."""
+    for ch in "CQ DE N6YU":
+        win.free_text.insertPlainText(ch)
+        win._on_echo(ch)
+        win._on_idle()
+    win.free_text.insertPlainText("\n")
+    win._on_idle()
+    assert "..." not in echo_line(win)
+    assert echo_line(win) == "CQ DE N6YU"
 
 
-def test_pasted_multiline_text_marks_each_line_end(win):
+def test_pasted_multiline_text_is_sent_without_markers(win):
     win.free_text.insertPlainText("AB\nCD")
-    assert win.sent == ["AB", "CD"]
+    assert win.sent == ["ABCD"]
     win._on_echo("ABCD")
-    assert echo_line(win) == "AB... CD"
+    assert echo_line(win) == "ABCD"
 
 
 def test_deleting_a_newline_sends_no_backspace_but_deleting_a_letter_does(win):

@@ -113,7 +113,7 @@ def measured_gap_ms(w, seconds: float) -> float:
 
 
 def check_marks() -> bool:
-    """'... ' after each sent message; Enter in free text is a marker, never a byte."""
+    """'... ' after each sent message (not free text); Enter in free text sends nothing."""
     w = start()
     written = []
     port = w.worker.keyer.port
@@ -136,7 +136,7 @@ def check_marks() -> bool:
     for chunk in ("E", "\n", "T"):
         w.free_text.insertPlainText(chunk)
         QTest.qWait(150)
-    expect("free text E, Enter, T", "E... T")
+    expect("free text E, Enter, T (no markers)", "ET")
     bad = [b for b in written if b"\x0a" in b or b"\x0d" in b]
     print(f"  no 0x0a / 0x0d byte written for Enter: {'PASS' if not bad else 'FAIL ' + str(bad)}")
     ok = ok and not bad

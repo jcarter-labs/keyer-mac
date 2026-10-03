@@ -511,17 +511,11 @@ class MainWindow(QWidget):
         for _ in range(erase):
             self.sig_backspace.emit()
         self._unsend(erase)
-        run = ""
-        for ch in text:
-            if ch in "\r\n":                                   # Enter ends a message; never sent
-                self._send_run(run)
-                run = ""
-                self._mark_message_end()
-            elif is_sendable(ch):
-                run += ch
-        self._send_run(run)
+        # Free text is plain typing: no end-of-message marker. Enter (and any other
+        # control character) is dropped, never sent: 0x0A would clear the keyer's buffer.
+        self._send_run("".join(ch for ch in text if is_sendable(ch)))
 
-    # -- "... " after each sent message ---------------------------------------------
+    # -- "... " after each sent message (canned messages and XMLRPC strings only) ----
     def _send_run(self, run: str) -> None:
         if run:
             self.sig_send_text.emit(run)
