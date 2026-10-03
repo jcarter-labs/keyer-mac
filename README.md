@@ -14,6 +14,7 @@ place this port deviates from the source.
 ## Running
 
 ```
+cd ~/Projects/keyer-mac
 source .venv/bin/activate
 python3 -m keyer_mac
 ```
