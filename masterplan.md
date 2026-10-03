@@ -36,7 +36,7 @@ Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Ari
 
 Rows 4–8 are evenly spaced.
 
-**Message box content:** one live countdown line is always the last line and updates in place ("Scanning for keyer… N" during the first scan, "Retrying in N s" ticking down once a second between automatic attempts). Everything else is inserted above it: status lines (identical consecutive ones are not repeated; "Keyer missing" appears once per outage), time-stamped diagnostics (a diagnostic with the same reason as the previous one replaces it with a new time stamp instead of piling up), and keyer echo as it arrives. The box clears on each new connect. Echo appears only when echo-back is on in settings; tests assume the default register has it on (verified in step 2.3).
+**Message box content:** one live countdown line is always the last line and updates in place ("Scanning for keyer… N", always counting down from 8 once a second, then "Scanning for keyer… connecting" while an attempt runs; after a failed attempt it starts over at 8, never at a different number). Everything else is inserted above it: status lines (identical consecutive ones are not repeated; "Keyer missing" appears once per outage), time-stamped diagnostics (a diagnostic with the same reason as the previous one replaces it with a new time stamp instead of piling up), and keyer echo as it arrives. The box clears on each new connect. Echo appears only when echo-back is on in settings; tests assume the default register has it on (verified in step 2.3).
 
 | Type size (line spacing about 1.3×; no added borders or bold) | Size |
 |---|---|
@@ -50,7 +50,7 @@ Rows 4–8 are evenly spaced.
 1. **Start-up and connect.** The user launches with the keyer plugged in, or plugs it in later.
    - The Message box shows "Scanning for keyer… 8", counting down once a second to 0. The countdown covers the whole first scan including handshake retries; a handshake still running at 0 is allowed to finish before "missing" shows.
    - Success: "Keyer found: WinKeyer vX.Y on <port>, N WPM" (N = the speed actually sent), and the port dropdown selects that port.
-   - No keyer found: "Keyer missing: no WinKeyer detected. Plug it in; it will connect automatically." appears as soon as the attempt fails (an instant failure does not wait out the 8 s), followed by a live "Retrying in N s" countdown. The port list is re-read every 2 s, and a newly enumerated WK-mini is tried at once; automatic retries back off 1 s, doubling to 30 s.
+   - No keyer found: "Keyer missing: no WinKeyer detected. Plug it in; it will connect automatically." appears as soon as the attempt fails (an instant failure does not wait out the 8 s), and the 8 s countdown starts over. Automatic attempts repeat every 8 s with no growing delay. The port list is re-read every 2 s, and a newly enumerated WK-mini is tried at once, without waiting for the countdown.
    - A keyer plugged in later is found within 2 s of enumeration plus handshake time (8 s at most), no restart.
    - The saved port is tried first if it exists; otherwise only ports with USB ID `1a86:7523` are probed. Other ports are listed in the dropdown but never auto-probed, so unrelated serial devices are not disturbed. Virtual ports (`cu.debug-console`, `cu.Bluetooth-Incoming-Port`) are never auto-selected or saved.
    - A port the user picks or types (Enter) is tried at once and kept until relaunch or disconnect; auto-probing stops while it is set.
@@ -64,7 +64,7 @@ Rows 4–8 are evenly spaced.
 5. **Settings (⚙).** The dialog sets Iambic A/B, Ultimatic, Bug, paddle swap, echo-back, autospace and CT spacing. Saving packs the mode register (default `11001110`), writes it to the keyer, and saves it as `mode_register`. Cancel changes nothing.
 6. **XMLRPC bridge.** `http://<host>:8000`, bound to `0.0.0.0`, no authentication. Methods: `k1elsendstring(str)`, `setspeed(int)`, `sendblended(str)`, `tuneon()`, `tuneoff()`, `clearbuffer()`. `setspeed` accepts only even values 6–34; anything else returns an XMLRPC fault and changes nothing. Pass: a call from another process sends the string and returns within 1 s. If port 8000 is in use, the app still starts and says so in the Message box.
 7. **Info.** The button opens a dialog that starts with "keyer-mac is an auto keyer written for the Mac to interface with a WinKeyer Mini via USB," then: version, connected port, WinKeyer firmware, config-file path, XMLRPC address and methods, the mbridak attribution and GPL notice, "Designed to work with the K1EL WinKeyer Mini," and `jcarter-labs/keyer-mac` with its URL. Closing changes nothing.
-8. **Diagnostics.** When a connect or a send fails, the Message box adds a line `HH:MM:SS <what failed>: <reason>`: no WinKeyer-mini visible; port could not be opened (with the system error); opened but no answer to host open (3 tries); answered but failed the echo test; disconnected, with the cause (serial error, no answer to the idle echo test, or which command's write failed). Each retry adds `HH:MM:SS Retrying in N s`. A successful connect prints none of these.
+8. **Diagnostics.** When a connect or a send fails, the Message box adds a line `HH:MM:SS <what failed>: <reason>`: no WinKeyer-mini visible; port could not be opened (with the system error); opened but no answer to host open (3 tries); answered but failed the echo test; disconnected, with the cause (serial error, no answer to the idle echo test, or which command's write failed). A successful connect prints none of these.
 9. **Footer.** The date is the build date (`YYYY-MM-DD`), a constant `__build_date__` beside `__version__`, not read from the clock. "v1.1" is the version.
 
 ## Data sources
@@ -142,7 +142,7 @@ Under `keyer_mac/`, each testable alone; only `worker.py` and `ui.py` need Qt.
 1. `config.py`: load/save `~/.keyer-mac.json`, defaults, bad-file handling; redirected `$HOME`.
 2. `ports.py`: enumerate, classify real vs virtual by USB vendor id, order candidates; pure functions on fake lists.
 3. `winkeyer.py`: protocol only: command bytes, mode-register packing, connect sequence, on an injected serial-like object (fake in tests, real in `tools/`).
-4. `worker.py`: serial thread: scan, countdown source, connect, reconnect with backoff, send queue, signals; fake port.
+4. `worker.py`: serial thread: scan, countdown source, connect, reconnect every 8 s, send queue, signals; fake port.
 5. `bridge.py`: XMLRPC thread; calls become signals; drops calls while disconnected; real `ServerProxy` against a stub worker.
 6. `ui.py`: window, layout, Arial and sizes, Message box, footer, Info dialog; no serial code; pytest-qt plus the fidelity script.
 7. `settings.py`, `__init__.py`, `__main__.py`: settings dialog; `__version__` and `__build_date__`; bootstrap only.
@@ -160,7 +160,7 @@ RULE (as given): Keep a short list of known limitations in the masterplan; updat
 7. `__build_date__` is edited by hand at each release.
 8. macOS Apple Silicon only; no `.app` bundle yet.
 9. No stop-sending button in 1.1; `clearbuffer` is reachable only over XMLRPC.
-10. The pad cannot span processes: relaunching the app within a fraction of a second of quitting it can still hit the stall; the worker's backoff recovers it.
+10. The pad cannot span processes: relaunching the app within a fraction of a second of quitting it can still hit the stall; the next attempt, 8 s later, recovers it.
 
 # Tasks
 
@@ -198,7 +198,7 @@ Rule 4 applies to every sub-step; "all tests" means the unit suite, and live che
 | 3.1 `config.py` | unit, temp `$HOME` | defaults; round-trip of `device`, `speed`, `1`–`5`, `mode_register`; key `6` ignored; bad JSON becomes `.bad` plus defaults |
 | 3.2 `ports.py` | unit, fake lists | virtual-only, real-only, mixed, suffix changed, none: right choice every time; a virtual port never saved |
 | 3.3 `winkeyer.py` | fake serial | exact bytes for host open, mode register, speed, pinned parameters, echo test; 3 retries then failure |
-| 3.4 `worker.py` | fake port, pytest-qt | scan, found, missing, disconnect, reconnect with backoff 1→30 s; settings re-sent in order on every connect; a stalled port does not stop 1 s UI ticks |
+| 3.4 `worker.py` | fake port, pytest-qt | scan, found, missing, disconnect, reconnect (an immediate attempt after a drop, then every 8 s); settings re-sent in order on every connect; a stalled port does not stop 1 s UI ticks |
 | 3.5 `bridge.py` | stub worker, real client | all six methods route; disconnected calls dropped with a note; port-8000 conflict does not abort |
 
 **Done when:** all unit tests pass, plus 50 simulated disconnect/reconnect cycles on the fake port, 0 failures.
