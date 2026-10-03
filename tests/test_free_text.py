@@ -51,20 +51,31 @@ def test_message_box_free_text_is_three_lines_high_and_scrolls(win):
     assert win.free_text.height() >= 3 * fm.lineSpacing()
 
 
-def test_message_box_countdown_in_place_status_appends_echo_accumulates(qtbot):
+def test_message_box_entry_rules(qtbot):
     box = MessageBox()
     qtbot.addWidget(box)
     box.set_countdown("Scanning for keyer… 8")
     box.set_countdown("Scanning for keyer… 7")
-    assert box.lines == ["Scanning for keyer… 7"]
-    box.add_line("Keyer found")               # replaces the countdown line
-    assert box.lines == ["Keyer found"]
-    box.add_line("Keyer found")               # identical consecutive line: not repeated
-    assert box.lines == ["Keyer found"]
+    assert box.lines == ["Scanning for keyer… 7"]          # in place
+    box.add_line("Keyer missing")                           # inserted above the countdown
+    assert box.lines == ["Keyer missing", "Scanning for keyer… 7"]
+    box.add_line("Keyer missing")                           # identical consecutive: not repeated
+    assert box.lines == ["Keyer missing", "Scanning for keyer… 7"]
     box.add_echo("TE")
-    box.add_echo("ST")
-    assert box.lines == ["Keyer found", "TEST"]
-    box.add_line("Keyer disconnected.")
-    assert box.lines[-1] == "Keyer disconnected."
+    box.add_echo("ST")                                      # echo accumulates on one line
+    assert box.lines == ["Keyer missing", "TEST", "Scanning for keyer… 7"]
+    box.clear_countdown()
+    assert box.lines == ["Keyer missing", "TEST"]
     box.clear_all()
     assert box.lines == [] and box.toPlainText() == ""
+
+
+def test_a_repeated_diagnostic_replaces_the_previous_one(qtbot):
+    box = MessageBox()
+    qtbot.addWidget(box)
+    box.add_diag("17:00:01 no keyer", key="no keyer")
+    box.set_countdown("Retrying in 2 s")
+    box.add_diag("17:00:03 no keyer", key="no keyer")        # same reason, later
+    assert box.lines == ["17:00:03 no keyer", "Retrying in 2 s"]
+    box.add_diag("17:00:04 port busy", key="port busy")      # a different reason appends
+    assert box.lines == ["17:00:03 no keyer", "17:00:04 port busy", "Retrying in 2 s"]

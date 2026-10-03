@@ -124,51 +124,71 @@ class InfoDialog(QDialog):
 
 
 class MessageBox(QPlainTextEdit):
-    """Read-only, 3 lines. The countdown updates one line in place; other
-    status lines append (identical consecutive ones are not repeated); keyer
-    echo appends to an echo line as it arrives."""
+    """Read-only, 3 lines. Entries are status lines, time-stamped diagnostics,
+    keyer echo and one live countdown. The countdown (if any) is always the
+    last line and updates in place; everything else is inserted above it.
+    A diagnostic that repeats the previous one replaces it (new time stamp)
+    instead of piling up; identical consecutive status lines are not repeated."""
 
     def __init__(self):
         super().__init__()
         self.setReadOnly(True)
         self.setFont(arial(PT_ENTRY))
         self.setFixedHeight(box_height_for_lines(self, 3))
-        self.lines: list[str] = []
-        self.kinds: list[str] = []
+        self.entries: list[list] = []        # [kind, key, text]
+
+    @property
+    def lines(self) -> list[str]:
+        return [e[2] for e in self.entries]
+
+    @property
+    def kinds(self) -> list[str]:
+        return [e[0] for e in self.entries]
 
     def _render(self) -> None:
         self.setPlainText("\n".join(self.lines))
         self.moveCursor(QTextCursor.MoveOperation.End)
 
+    def _insert_index(self) -> int:
+        """Where a non-countdown entry goes: above the countdown, if there is one."""
+        if self.entries and self.entries[-1][0] == "countdown":
+            return len(self.entries) - 1
+        return len(self.entries)
+
     def clear_all(self) -> None:
-        self.lines, self.kinds = [], []
+        self.entries = []
+        self._render()
+
+    def clear_countdown(self) -> None:
+        self.entries = [e for e in self.entries if e[0] != "countdown"]
         self._render()
 
     def set_countdown(self, text: str) -> None:
-        if self.kinds and self.kinds[-1] == "countdown":
-            self.lines[-1] = text
-        else:
-            self.lines.append(text)
-            self.kinds.append("countdown")
+        self.entries = [e for e in self.entries if e[0] != "countdown"]
+        self.entries.append(["countdown", None, text])
         self._render()
 
     def add_line(self, text: str) -> None:
-        """Append a status line; a countdown line in progress is replaced."""
-        if self.kinds and self.kinds[-1] == "countdown":
-            self.lines[-1], self.kinds[-1] = text, "line"
-        elif self.lines and self.kinds[-1] == "line" and self.lines[-1] == text:
+        i = self._insert_index()
+        if i and self.entries[i - 1][0] == "line" and self.entries[i - 1][2] == text:
             return
+        self.entries.insert(i, ["line", None, text])
+        self._render()
+
+    def add_diag(self, text: str, key: str) -> None:
+        i = self._insert_index()
+        if i and self.entries[i - 1][0] == "diag" and self.entries[i - 1][1] == key:
+            self.entries[i - 1][2] = text
         else:
-            self.lines.append(text)
-            self.kinds.append("line")
+            self.entries.insert(i, ["diag", key, text])
         self._render()
 
     def add_echo(self, chars: str) -> None:
-        if self.kinds and self.kinds[-1] == "echo":
-            self.lines[-1] += chars
+        i = self._insert_index()
+        if i and self.entries[i - 1][0] == "echo":
+            self.entries[i - 1][2] += chars
         else:
-            self.lines.append(chars)
-            self.kinds.append("echo")
+            self.entries.insert(i, ["echo", None, chars])
         self._render()
 
 
@@ -193,6 +213,8 @@ class MainWindow(QWidget):
         self.remaining = SCAN_SECONDS
         self._prefix = SCAN_PREFIX
         self._scanning = False
+        self._retry_left = 0
+        self._missing_shown = False
         self._old_text = ""
 
         root = QVBoxLayout(self)
@@ -361,6 +383,7 @@ class MainWindow(QWidget):
 
     def _start_countdown(self, prefix: str) -> None:
         self._prefix, self.remaining, self._scanning, self.result = prefix, SCAN_SECONDS, True, None
+        self._missing_shown = False
         self._show_countdown()
         self._timer.start()
 
@@ -385,10 +408,16 @@ class MainWindow(QWidget):
         if self._scanning and self.remaining > 0:
             self.remaining -= 1
             self._show_countdown()
+        elif not self._scanning and self._retry_left > 0:
+            self._retry_left -= 1
+            self._show_retry()
+        elif not self._scanning:
+            self._timer.stop()
 
     def _on_found(self, device: str, version: int, speed: int) -> None:
         self._scanning = False
         self._timer.stop()
+        self._missing_shown = False
         self._connected = True
         self._firmware = version
         self.result = "found"
@@ -404,10 +433,12 @@ class MainWindow(QWidget):
 
     def _on_missing(self) -> None:
         self._scanning = False
-        self._timer.stop()
         self.result = "missing"
-        self.message.add_line(MISSING_TEXT)
-        self._record(MISSING_TEXT)
+        self.message.clear_countdown()
+        if not self._missing_shown:
+            self._missing_shown = True
+            self.message.add_line(MISSING_TEXT)
+            self._record(MISSING_TEXT)
 
     def _on_disconnected(self) -> None:
         self._connected = False
@@ -418,11 +449,20 @@ class MainWindow(QWidget):
     def _on_diagnostic(self, text: str) -> None:
         """A failure and its reason, time-stamped, so it can be diagnosed by use."""
         line = f"{datetime.now():%H:%M:%S} {text}"
-        self.message.add_line(line)
+        self.message.add_diag(line, key=text)
         self._record(line)
 
     def _on_retry_scheduled(self, delay_s: float) -> None:
-        self._on_diagnostic(f"Retrying in {int(delay_s)} s")
+        """Show the wait until the next automatic attempt, ticking down live."""
+        self._scanning = False
+        self._retry_left = int(delay_s)
+        self._show_retry()
+        self._timer.start()
+
+    def _show_retry(self) -> None:
+        text = f"Retrying in {self._retry_left} s"
+        self.message.set_countdown(text)
+        self._record(text)
 
     def _on_note(self, text: str) -> None:
         self.message.add_line(text)

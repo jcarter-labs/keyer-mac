@@ -1,7 +1,7 @@
 """keyer-mac entry point: `python3 -m keyer_mac`.
 
 KEYER_MAC_AUTOQUIT=1 prints each status line as it appears and exits once the
-scan resolves (used by tools/live_smoke.py). KEYER_MAC_BRIDGE_HOST overrides the
+scan resolves (used by tools/live_smoke.py). KEYER_MAC_TRACE=1 prints the status lines without quitting. KEYER_MAC_BRIDGE_HOST overrides the
 XMLRPC bind address (default 0.0.0.0; tools use 127.0.0.1 to avoid a firewall prompt).
 """
 
@@ -20,6 +20,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     win = MainWindow(start_bridge=True, bridge_host=os.environ.get("KEYER_MAC_BRIDGE_HOST", "0.0.0.0"))
     autoquit = os.environ.get("KEYER_MAC_AUTOQUIT") == "1"
+    trace = autoquit or os.environ.get("KEYER_MAC_TRACE") == "1"
     shown = 0
 
     def watch():
@@ -31,10 +32,11 @@ def main() -> int:
             win.shutdown()
             app.quit()
 
-    if autoquit:
+    if trace:
         poll = QTimer()
         poll.timeout.connect(watch)
         poll.start(50)
+    if autoquit:
         QTimer.singleShot(25000, lambda: (win.shutdown(), app.quit()))
     win.show()
     win.start_scan()
