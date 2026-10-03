@@ -278,10 +278,19 @@ def test_no_keyer_visible_is_explained(h):
 def test_a_port_that_will_not_open_is_explained_with_the_error(h):
     h.world.open_port_orig = h.world.open_port
     def refuse(device):
-        raise serial.SerialException("resource busy")
+        raise serial.SerialException("permission denied")
     h.worker._open_port = refuse
     h.worker.scan(None, None, 0b11001110, 20)
-    assert diag(h) == [f"{WK.device} could not be used: resource busy"]
+    assert diag(h) == [f"{WK.device} could not be used: permission denied"]
+
+
+def test_a_port_held_by_another_program_says_so_plainly(h):
+    def refuse(device):
+        raise serial.SerialException(f"Could not exclusively lock port {device}: [Errno 35] Resource temporarily unavailable")
+    h.worker._open_port = refuse
+    h.worker.scan(None, None, 0b11001110, 20)
+    assert diag(h) == [f"{WK.device} is in use by another program (another keyer-mac window?). "
+                       "Close it; this window will connect by itself"]
 
 
 def test_a_keyer_that_does_not_answer_is_explained(h):

@@ -110,7 +110,7 @@ class Worker(QObject):
                     log.warning(msg)
                     self.diagnostic.emit(msg)
             except (serial.SerialException, OSError) as exc:
-                msg = f"{device} could not be used: {exc}"
+                msg = winkeyer.describe_open_error(device, exc)
                 log.warning(msg)
                 self.diagnostic.emit(msg)
             if port is not None:

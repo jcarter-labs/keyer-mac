@@ -60,10 +60,29 @@ def open_port(device: str, timeout: float = 0.05):
     for key, value in SERIAL_SETTINGS.items():
         setattr(port, key, value)
     port.rtscts = False
+    # Exclusive access: a second program (e.g. a second keyer-mac window) is refused at
+    # once instead of silently sharing the device and stealing the keyer's replies.
+    port.exclusive = True
     port.timeout = timeout
     port.write_timeout = 1
     port.open()
     return port
+
+
+def port_in_use(exc: BaseException) -> bool:
+    """True if a failed open means another program already has the port."""
+    text = str(exc).lower()
+    code = getattr(exc, "errno", None)
+    return (code in (16, 35) or "busy" in text or "exclusively lock" in text
+            or "temporarily unavailable" in text or "multiple access" in text)
+
+
+def describe_open_error(device: str, exc: BaseException) -> str:
+    """The sentence shown in the Message box when a port cannot be used."""
+    if port_in_use(exc):
+        return (f"{device} is in use by another program (another keyer-mac window?). "
+                "Close it; this window will connect by itself")
+    return f"{device} could not be used: {exc}"
 
 
 class WinKeyer:
