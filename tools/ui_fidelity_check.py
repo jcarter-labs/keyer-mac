@@ -53,8 +53,11 @@ def build_targets() -> dict:
             "window_background": win["window"]["background"],
             "field_fill": win["text_boxes"][0]["fill"],
             "font_family": "Arial",
-            "font_pt": {"entry_and_display": 16, "dropdowns": 14,
-                        "labels_and_buttons": 13, "footer": 11},
+            "font_pt": {"entry_and_display": 16, "speed_dropdown": 14, "port_dropdown": 12,
+                        "labels_and_buttons": 13, "gear_glyph": 20, "footer": 11},
+            "header_gap": 10,
+            "control_height": 26,
+            "speed_dropdown_min_width": 60,
             "box_height_rule": "the viewport shows exactly 3 text lines "
                                "(viewport height // QFontMetrics.lineSpacing() == 3); "
                                "1.0 baseline (13 pt): message box %d px, free-text box %d px"
@@ -77,8 +80,8 @@ def check_window(targets: dict, out_png: str) -> list[tuple[str, bool, str]]:
 
     import keyer_mac
     from keyer_mac import config
-    from keyer_mac.ui import (FIELD_BG, FONT_FAMILY, PT_DROPDOWN, PT_ENTRY, PT_FOOTER,
-                              PT_LABEL, WINDOW_BG, MainWindow)
+    from keyer_mac.ui import (FONT_FAMILY, PT_DROPDOWN, PT_ENTRY, PT_FOOTER, PT_GEAR, PT_LABEL,
+                              PT_PORT, MainWindow)
 
     t = targets["targets_1_1"]
     tol = targets["tolerance_px"]
@@ -136,15 +139,26 @@ def check_window(targets: dict, out_png: str) -> list[tuple[str, bool, str]]:
         and 0 <= win.speed_box.x() - (win.speed_label.x() + win.speed_label.width()) <= 12,
         f"label x {win.free_label.x()}, speed label {win.speed_label.x()}..{win.speed_label.x() + win.speed_label.width()}, box x {win.speed_box.x()}")
 
+    # header grouping: Info | gear | port box, equal gaps, equal heights
+    gap_a = win.gear.x() - (win.info_button.x() + win.info_button.width())
+    gap_b = win.port_box.x() - (win.gear.x() + win.gear.width())
+    row("Info-gear and gear-port gaps equal the header gap",
+        abs(gap_a - t["header_gap"]) <= tol and abs(gap_b - t["header_gap"]) <= tol, f"gaps {gap_a}, {gap_b}, want {t['header_gap']}")
+    heights = [w.height() for w in (win.info_button, win.gear, win.port_box, win.speed_box)]
+    row("Info, gear and both dropdowns share one height", all(abs(h - t["control_height"]) <= tol for h in heights), f"{heights}")
+    row("speed dropdown wide enough for its popup", win.speed_box.width() >= t["speed_dropdown_min_width"], f"{win.speed_box.width()} px")
+
     # fonts
     def font_ok(widget, pt):
         f = widget.font()
         return f.family() == FONT_FAMILY and f.pointSize() == pt
     groups = {
         f"{PT_ENTRY} pt entry/display": [win.message, win.free_text, *win.msg_fields],
-        f"{PT_DROPDOWN} pt dropdowns": [win.port_box, win.speed_box],
+        f"{PT_DROPDOWN} pt speed dropdown": [win.speed_box],
+        f"{PT_PORT} pt port dropdown": [win.port_box],
         f"{PT_LABEL} pt labels/buttons": [win.header_label, win.free_label, win.speed_label, win.info_button,
-                                          win.gear, *win.msg_buttons],
+                                          *win.msg_buttons],
+        f"{PT_GEAR} pt gear glyph": [win.gear],
         f"{PT_FOOTER} pt footer": [win.date_label, win.version_label],
     }
     for name, widgets in groups.items():

@@ -14,7 +14,8 @@ from pathlib import Path
 from PyQt6.QtCore import QMetaObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout, QLabel,
-                             QLineEdit, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget)
+                             QLineEdit, QListView, QPlainTextEdit, QPushButton, QTextBrowser, QVBoxLayout,
+                             QWidget)
 
 import keyer_mac
 from keyer_mac import config, winkeyer
@@ -32,19 +33,28 @@ WINDOW_BG = "#ededed"
 FIELD_BG = "#ffffff"
 FONT_FAMILY = "Arial"
 PT_ENTRY, PT_DROPDOWN, PT_LABEL, PT_FOOTER = 16, 14, 13, 11
+PT_PORT = 12                # the port name is secondary information: smaller, quieter
+PT_GEAR = 20                # the gear glyph needs to be big to read as a gear
+CONTROL_HEIGHT = 26         # Info, gear and both dropdowns share one height
+HEADER_GAP = 10             # Info | gear | port box spacing
+SPEED_BOX_WIDTH = 64        # wide enough that the popup list is not clipped
+GEAR_WIDTH = 34
 MSG_BUTTON_WIDTH = 65       # measured from keyer-mac-running.png
 PORT_BOX_WIDTH = 190        # half the 1.0 width (tools/ui_targets.json)
-PORT_BOX_HEIGHT = 26
 MESSAGE_ROW_GAP = 17        # measured from keyer-mac-running.png
 WINDOW_WIDTH = 579
 BORDER = "#b6b6b6"
+CHEVRON = (Path(__file__).resolve().parent / "resources" / "chevron.png").as_posix()
 STYLE = f"""
 QWidget {{ background:{WINDOW_BG}; font-family:{FONT_FAMILY}; }}
 QLabel {{ background:transparent; }}
 QPlainTextEdit, QLineEdit {{ background:{FIELD_BG}; border:1px solid {BORDER}; border-radius:3px; }}
-QComboBox {{ background:{FIELD_BG}; border:1px solid {BORDER}; border-radius:4px; padding:0px 6px; }}
+QComboBox {{ background:{FIELD_BG}; border:1px solid {BORDER}; border-radius:4px; padding:0px 4px 0px 6px; }}
 QComboBox QLineEdit {{ border:none; }}
-QComboBox QAbstractItemView {{ background:{FIELD_BG}; }}
+QComboBox::drop-down {{ border:none; width:22px; }}
+QComboBox::down-arrow {{ image:url({CHEVRON}); width:14px; height:14px; }}
+QComboBox QAbstractItemView {{ background:{FIELD_BG}; border:1px solid {BORDER}; selection-background-color:#dcdcdc;
+                              selection-color:#000000; outline:0; }}
 QPushButton {{ background:#f7f7f7; border:1px solid {BORDER}; border-radius:5px; padding:3px 8px; }}
 QPushButton:pressed {{ background:#dcdcdc; }}
 QTextBrowser {{ background:{FIELD_BG}; }}
@@ -56,6 +66,17 @@ def arial(pt: int) -> QFont:
     font = QFont(FONT_FAMILY)
     font.setPointSize(pt)
     return font
+
+
+def short_port_name(device: str) -> str:
+    """/dev/cu.usbserial-8330 -> usbserial-8330 (the prefix is not information)."""
+    return device[len("/dev/cu."):] if device.startswith("/dev/cu.") else device
+
+
+def full_port_name(text: str) -> str:
+    """Inverse of short_port_name for typed text: a bare name gets /dev/cu."""
+    text = text.strip()
+    return text if (not text or text.startswith("/")) else "/dev/cu." + text
 
 
 def box_height_for_lines(box: QPlainTextEdit, lines: int) -> int:
@@ -223,26 +244,32 @@ class MainWindow(QWidget):
         al_left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         al_right = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
-        # row 0: "Message" label, Info, settings gear ... port dropdown (right)
+        # row 0: "Message" label (left); Info, settings gear and the port dropdown
+        # grouped on the right, HEADER_GAP apart
         header = QHBoxLayout()
-        header.setSpacing(10)
+        header.setSpacing(HEADER_GAP)
         self.header_label = QLabel("Message")
         self.header_label.setFont(arial(PT_LABEL))
         self.info_button = QPushButton("Info")
         self.info_button.setFont(arial(PT_LABEL))
+        self.info_button.setFixedHeight(CONTROL_HEIGHT)
         self.info_button.clicked.connect(self.open_info)
         self.gear = QPushButton("⚙")
-        self.gear.setFont(arial(PT_LABEL))
+        self.gear.setFont(arial(PT_GEAR))
+        self.gear.setFixedSize(GEAR_WIDTH, CONTROL_HEIGHT)
+        self.gear.setStyleSheet("padding:0px 0px 2px 0px;")
         self.gear.clicked.connect(self.open_settings)
         self._firmware: int | None = None
         # port dropdown: editable; picking or typing a port tries it at once
         self.port_box = QComboBox()
         self.port_box.setEditable(True)
-        self.port_box.setFont(arial(PT_DROPDOWN))
-        self.port_box.setFixedSize(PORT_BOX_WIDTH, PORT_BOX_HEIGHT)
-        for widget in (self.header_label, self.info_button, self.gear):
-            header.addWidget(widget)
+        self.port_box.setFont(arial(PT_PORT))
+        self.port_box.setView(QListView())
+        self.port_box.setFixedSize(PORT_BOX_WIDTH, CONTROL_HEIGHT)
+        header.addWidget(self.header_label)
         header.addStretch(1)
+        header.addWidget(self.info_button)
+        header.addWidget(self.gear)
         header.addWidget(self.port_box)
         root.addLayout(header)
         self.refresh_ports()
@@ -262,6 +289,8 @@ class MainWindow(QWidget):
         self.speed_label.setFont(arial(PT_LABEL))
         self.speed_box = QComboBox()
         self.speed_box.setFont(arial(PT_DROPDOWN))
+        self.speed_box.setView(QListView())
+        self.speed_box.setFixedSize(SPEED_BOX_WIDTH, CONTROL_HEIGHT)
         for wpm in range(winkeyer.SPEED_MIN, winkeyer.SPEED_MAX + 1, 2):
             self.speed_box.addItem(str(wpm), wpm)
         self.speed_box.setCurrentIndex(self.speed_box.findData(self.cfg["speed"]))
@@ -353,13 +382,17 @@ class MainWindow(QWidget):
         self.port_box.blockSignals(True)
         self.port_box.clear()
         for p in self._list_ports():
-            self.port_box.addItem(p.device)
-            self.port_box.setItemData(self.port_box.count() - 1, p.description, Qt.ItemDataRole.ToolTipRole)
-        self.port_box.setCurrentText(current or self.cfg.get("device", ""))
+            self.port_box.addItem(short_port_name(p.device), p.device)
+            self.port_box.setItemData(self.port_box.count() - 1, f"{p.device}  ({p.description})",
+                                      Qt.ItemDataRole.ToolTipRole)
+        self.port_box.setCurrentText(current or short_port_name(self.cfg.get("device", "")))
+        self.port_box.setToolTip(full_port_name(self.port_box.currentText()))
         self.port_box.blockSignals(False)
 
     def _port_chosen(self) -> None:
-        device = self.port_box.currentText().strip()
+        text = self.port_box.currentText().strip()
+        index = self.port_box.findText(text)
+        device = self.port_box.itemData(index) if index >= 0 else full_port_name(text)
         if device and device != getattr(self.worker, "device", None):
             self.start_scan(manual=device)
 
@@ -418,7 +451,8 @@ class MainWindow(QWidget):
         self._firmware = version
         self.result = "found"
         self.port_box.blockSignals(True)
-        self.port_box.setCurrentText(device)
+        self.port_box.setCurrentText(short_port_name(device))
+        self.port_box.setToolTip(device)
         self.port_box.blockSignals(False)
         self.message.clear_all()
         text = f"Keyer found: WinKeyer v{winkeyer.format_version(version)} on {device}, {speed} WPM"

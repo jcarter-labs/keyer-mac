@@ -36,8 +36,10 @@ class Rig:
 def test_dropdown_lists_every_port_virtual_ones_included_with_tooltips(qtbot, cfg_path):
     r = Rig(qtbot, [DEBUG, WK])
     box = r.win.port_box
-    assert [box.itemText(i) for i in range(box.count())] == [DEBUG.device, WK.device]
-    assert box.itemData(1, 3) == "USB Serial"           # Qt.ToolTipRole == 3
+    # shown without the "/dev/cu." prefix; the full path is the item data and in the tooltip
+    assert [box.itemText(i) for i in range(box.count())] == ["debug-console", "usbserial-8330"]
+    assert [box.itemData(i) for i in range(box.count())] == [DEBUG.device, WK.device]
+    assert box.itemData(1, 3) == "/dev/cu.usbserial-8330  (USB Serial)"   # Qt.ToolTipRole == 3
     assert box.isEditable()
 
 
@@ -64,7 +66,8 @@ def test_typing_a_port_and_pressing_enter_starts_a_scan(qtbot, cfg_path):
 def test_found_selects_the_port_without_starting_another_scan(qtbot, cfg_path):
     r = Rig(qtbot, [WK])
     r.win._on_found(WK.device, 0x1F, 20)
-    assert r.win.port_box.currentText() == WK.device
+    assert r.win.port_box.currentText() == "usbserial-8330"
+    assert r.win.port_box.toolTip() == WK.device                 # full path on hover
     assert r.scans == []
 
 
@@ -89,3 +92,39 @@ def test_the_watch_is_idle_while_a_keyer_is_connected(qtbot, cfg_path):
     r.ports.append(WK)
     r.win._watch_ports()
     assert len(r.scans) == n
+
+
+def test_a_typed_short_name_or_full_path_resolves_to_the_full_device(qtbot, cfg_path):
+    r = Rig(qtbot, [WK])
+    r.win.port_box.lineEdit().setText("usbserial-1")
+    r.win.port_box.lineEdit().editingFinished.emit()
+    assert r.scans[-1][1] == "/dev/cu.usbserial-1"
+    r.win.port_box.lineEdit().setText("/dev/tty.usbserial-2")
+    r.win.port_box.lineEdit().editingFinished.emit()
+    assert r.scans[-1][1] == "/dev/tty.usbserial-2"
+
+
+def test_port_name_helpers():
+    from keyer_mac.ui import full_port_name, short_port_name
+    assert short_port_name("/dev/cu.usbserial-8330") == "usbserial-8330"
+    assert short_port_name("/dev/tty.x") == "/dev/tty.x"
+    assert full_port_name("usbserial-8330") == "/dev/cu.usbserial-8330"
+    assert full_port_name("/dev/cu.a") == "/dev/cu.a" and full_port_name("  ") == ""
+
+
+def test_header_controls_are_grouped_on_the_right_ten_apart(qtbot, cfg_path):
+    r = Rig(qtbot, [WK])
+    w = r.win
+    w.show()
+    gap_info_gear = w.gear.x() - (w.info_button.x() + w.info_button.width())
+    gap_gear_port = w.port_box.x() - (w.gear.x() + w.gear.width())
+    assert gap_info_gear == gap_gear_port == 10
+    assert w.header_label.x() < w.info_button.x() - 100          # label stays far left
+    assert w.info_button.height() == w.gear.height() == w.port_box.height() == 26
+
+
+def test_speed_box_is_wide_enough_for_its_popup_and_the_gear_glyph_is_big(qtbot, cfg_path):
+    r = Rig(qtbot, [WK])
+    assert r.win.speed_box.width() >= 60
+    assert r.win.gear.font().pointSize() == 20
+    assert r.win.port_box.font().pointSize() == 12

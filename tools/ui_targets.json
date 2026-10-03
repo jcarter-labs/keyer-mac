@@ -98,16 +98,20 @@
     }
   },
   "targets_1_1": {
-    "box_height_rule": "lines * QFontMetrics.lineSpacing() + 2 * frame; 1.0 baseline (13 pt): message box 112 px, free-text box 153 px",
+    "box_height_rule": "the viewport shows exactly 3 text lines (viewport height // QFontMetrics.lineSpacing() == 3); 1.0 baseline (13 pt): message box 112 px, free-text box 153 px",
+    "control_height": 26,
     "field_fill": "#ffffff",
     "font_family": "Arial",
     "font_pt": {
-      "dropdowns": 14,
       "entry_and_display": 16,
       "footer": 11,
-      "labels_and_buttons": 13
+      "gear_glyph": 20,
+      "labels_and_buttons": 13,
+      "port_dropdown": 12,
+      "speed_dropdown": 14
     },
     "free_text_box_lines": 3,
+    "header_gap": 10,
     "margin_left": 15,
     "margin_right": 15,
     "message_box_lines": 3,
@@ -117,6 +121,7 @@
     "msg_button_width": 65,
     "port_dropdown_height": 26,
     "port_dropdown_width": 190,
+    "speed_dropdown_min_width": 60,
     "window_background": "#ededed",
     "window_width": 579
   },

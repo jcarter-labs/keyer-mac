@@ -21,28 +21,30 @@ Window "keyer-mac", about 579 pt wide, 15 pt margins, 10 pt between columns, Ari
 | # | Element | Type | Where it sits |
 |---|---|---|---|
 | 1 | "Message" | label | Row 0, far left, vertically centered |
-| 2 | "Info" | button | Row 0, right of the label, left of the gear |
-| 3 | ⚙ | button (opens settings dialog) | Row 0, right of Info, left of the port dropdown |
-| 4 | Port dropdown | editable combo box | Row 0, right-aligned to the margin, about 190 pt wide (half the 1.0 width) |
+| 2 | "Info" | button | Row 0, right group: left of the gear, 10 pt gap |
+| 3 | ⚙ | button, 34 pt wide, glyph 20 pt (opens settings dialog) | Row 0, between Info and the port dropdown, 10 pt gaps either side |
+| 4 | Port dropdown | editable combo box, 12 pt; shows the name without `/dev/cu.` (full path in the tooltip and the list tooltips); a typed bare name gets `/dev/cu.` added | Row 0, right-aligned to the margin, 190 pt wide (half the 1.0 width), right of the gear |
 | 5 | Message box | read-only text, 3 lines, white | Row 1, full width, left-justified; sent text and status |
 | 6 | "Free text input" | label | Row 2, far left |
 | 7 | "Speed:" | label | Row 2, right-justified, directly left of the speed dropdown |
-| 8 | Speed dropdown | combo box, even values 6–34 WPM (15 entries), default 20 | Row 2, flush right |
+| 8 | Speed dropdown | combo box, 64 pt wide so the popup list is not clipped, even values 6–34 WPM (15 entries), default 20 | Row 2, flush right |
 | 9 | Free-text input | text edit, 3 lines, white | Row 3, full width, left-justified |
 | 10 | Message fields 1–5 | single-line text, white | Rows 4–8, left, all but the button column |
 | 11 | "msg 1" to "msg 5" | buttons, 65 pt wide (measured) | Rows 4–8, flush right, one per field |
 | 12 | Build date | label, `YYYY-MM-DD` | Row 9, bottom-left |
 | 13 | "v1.1" | label | Row 9, bottom-right |
 
-Rows 4–8 are evenly spaced.
+Rows 4–8 are evenly spaced. Info, ⚙, the port dropdown and the speed dropdown are all 26 pt high. Both dropdowns use a thin gray chevron instead of the platform arrow, and a styled list popup.
 
 **Message box content:** one live countdown line is always the last line and updates in place ("Scanning for keyer… N", always counting down from 8 once a second, then "Scanning for keyer… connecting" while an attempt runs; after a failed attempt it starts over at 8, never at a different number). Everything else is inserted above it: status lines (identical consecutive ones are not repeated; "Keyer missing" appears once per outage), time-stamped diagnostics (a diagnostic with the same reason as the previous one replaces it with a new time stamp instead of piling up), and keyer echo as it arrives. The box clears on each new connect. Echo appears only when echo-back is on in settings; tests assume the default register has it on (verified in step 2.3).
 
 | Type size (line spacing about 1.3×; no added borders or bold) | Size |
 |---|---|
 | Message box, free-text input, message fields 1–5 | 16 pt |
-| Port dropdown, speed dropdown | 14 pt |
-| Labels, Info/⚙/"msg N" buttons | 13 pt |
+| Speed dropdown | 14 pt |
+| Port dropdown (secondary information) | 12 pt |
+| Labels, Info/"msg N" buttons | 13 pt |
+| ⚙ glyph | 20 pt |
 | Footer (date, "v1.1") | 11 pt |
 
 ## Features
